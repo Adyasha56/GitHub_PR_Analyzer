@@ -10,6 +10,7 @@ class TaskManager {
   constructor() {
     // Map to store all tasks: taskId -> task data
     this.tasks = new Map();
+    this.MAX_TASKS = 1000; // Maximum tasks to keep in memory
   }
 
   /**
@@ -18,6 +19,19 @@ class TaskManager {
    * @param {object} metadata - Initial task data (repo_url, pr_number)
    */
   createTask(taskId, metadata = {}) {
+    // Check if we've hit the limit
+    if (this.tasks.size >= this.MAX_TASKS) {
+      console.log('[TaskManager] Max tasks reached, cleaning up...');
+      this.cleanupOldTasks();
+
+      // If still at max after cleanup, remove oldest
+      if (this.tasks.size >= this.MAX_TASKS) {
+        const oldestKey = this.tasks.keys().next().value;
+        this.tasks.delete(oldestKey);
+        console.log(`[TaskManager] Removed oldest task: ${oldestKey}`);
+      }
+    }
+
     this.tasks.set(taskId, {
       task_id: taskId,
       status: 'pending',
@@ -149,4 +163,12 @@ class TaskManager {
 }
 
 // Export a single instance (singleton pattern)
-module.exports = new TaskManager();
+const taskManagerInstance = new TaskManager();
+
+// Auto-cleanup old tasks every hour to prevent memory leak
+setInterval(() => {
+  taskManagerInstance.cleanupOldTasks();
+  console.log('[TaskManager] Cleaned up old tasks');
+}, 3600000); // Run every 1 hour
+
+module.exports = taskManagerInstance;

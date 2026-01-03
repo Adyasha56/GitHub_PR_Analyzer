@@ -10,7 +10,7 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 
 const { fetchPRFiles, formatFilesForAI } = require('../services/github');
-const { analyzeCode } = require('../services/ai');
+const { analyzeCodeWithAgent } = require('../services/langchain');
 const taskManager = require('../utils/taskManager');
 
 const router = express.Router();
@@ -22,15 +22,41 @@ router.post('/analyze-pr', async (req, res) => {
   try {
     const { repo_url, pr_number, github_token } = req.body;
 
+    // Validate required fields
     if (!repo_url || !pr_number) {
       return res.status(400).json({
         error: 'repo_url and pr_number are required'
       });
     }
 
-    if (typeof pr_number !== 'number' || pr_number < 1) {
+    // Validate PR number
+    if (typeof pr_number !== 'number' || pr_number < 1 || pr_number > 999999) {
       return res.status(400).json({
-        error: 'pr_number must be a positive number'
+        error: 'pr_number must be a positive number (1-999999)'
+      });
+    }
+
+    // Validate and sanitize repo_url
+    if (typeof repo_url !== 'string' || repo_url.length > 200) {
+      return res.status(400).json({
+        error: 'repo_url must be a valid string (max 200 characters)'
+      });
+    }
+
+    // Validate GitHub URL format
+    const githubUrlPattern = /^https?:\/\/(www\.)?github\.com\/[\w-]+\/[\w.-]+\/?$/;
+    const cleanUrl = repo_url.replace('.git', '').replace(/\/$/, '');
+
+    if (!githubUrlPattern.test(cleanUrl)) {
+      return res.status(400).json({
+        error: 'repo_url must be a valid GitHub repository URL (e.g., https://github.com/owner/repo)'
+      });
+    }
+
+    // Validate github_token if provided
+    if (github_token && (typeof github_token !== 'string' || github_token.length > 500)) {
+      return res.status(400).json({
+        error: 'github_token must be a valid string (max 500 characters)'
       });
     }
 
@@ -110,9 +136,9 @@ async function processAnalysis(taskId, repoUrl, prNumber, githubToken) {
 
     const formattedCode = formatFilesForAI(files);
 
-    console.log(`[Process] Sending code to AI`);
+    console.log(`[Process] Sending to LangChain agent for analysis`);
 
-    const analysis = await analyzeCode(formattedCode, {
+    const analysis = await analyzeCodeWithAgent(formattedCode, {
       repo_url: repoUrl,
       pr_number: prNumber
     });
@@ -127,3 +153,4 @@ async function processAnalysis(taskId, repoUrl, prNumber, githubToken) {
 }
 
 module.exports = router;
+

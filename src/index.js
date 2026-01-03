@@ -98,9 +98,9 @@ app.listen(PORT, () => {
   
   // Show API key status based on provider
   if (AI_PROVIDER === 'grok') {
-    console.log(`Grok API: ${(process.env.XAI_API_KEY || process.env.GROK_API_KEY) ? '✓ Configured' : '✗ Missing'}`);
+    console.log(` Grok API: ${(process.env.XAI_API_KEY || process.env.GROK_API_KEY) ? '✓ Configured' : '✗ Missing'}`);
   } else if (AI_PROVIDER === 'gemini') {
-    console.log(`Gemini API: ${process.env.GOOGLE_API_KEY ? '✓ Configured' : '✗ Missing'}`);
+    console.log(` Gemini API: ${process.env.GOOGLE_API_KEY ? '✓ Configured' : '✗ Missing'}`);
   } else if (AI_PROVIDER === 'openai') {
     console.log(` OpenAI API: ${process.env.OPENAI_API_KEY ? '✓ Configured' : '✗ Missing'}`);
   } else if (AI_PROVIDER === 'claude') {

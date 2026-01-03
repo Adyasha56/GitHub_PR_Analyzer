@@ -33,10 +33,17 @@ async function fetchPRFiles(repoUrl, prNumber, githubToken) {
         'User-Agent': 'AI-Code-Reviewer',
         Authorization: `Bearer ${githubToken}`
       },
-      timeout: 10000
+      timeout: 30000, // Increased to 30s for large repos
+      maxContentLength: 50 * 1024 * 1024 // 50MB limit
     });
 
     console.log(`[GitHub] Successfully fetched ${response.data.length} files`);
+
+    // Limit number of files to prevent memory issues
+    if (response.data.length > 100) {
+      console.warn(`[GitHub] PR has ${response.data.length} files, limiting to first 100`);
+      response.data = response.data.slice(0, 100);
+    }
 
     return response.data.map(file => ({
       filename: file.filename,
@@ -57,6 +64,18 @@ async function fetchPRFiles(repoUrl, prNumber, githubToken) {
 
     if (error.response?.status === 401 || error.response?.status === 403) {
       throw new Error('GitHub authentication failed. Invalid or missing token.');
+    }
+
+    if (error.response?.status === 422) {
+      throw new Error('Invalid request. Check the PR number.');
+    }
+
+    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+      throw new Error('GitHub API timeout. The repository might be too large.');
+    }
+
+    if (error.code === 'ENOTFOUND') {
+      throw new Error('Network error. Cannot reach GitHub API.');
     }
 
     throw new Error(`Failed to fetch PR: ${error.message}`);
