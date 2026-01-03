@@ -56,7 +56,7 @@ router.post('/analyze-pr', async (req, res) => {
 
     console.log(`[API] Created task ${taskId} for ${repo_url} PR #${pr_number}`);
 
-    // Start processing in background (don't await!)
+    // Start processing in background
     processAnalysis(taskId, repo_url, pr_number, github_token)
       .catch(error => {
         console.error(`[API] Background processing error for task ${taskId}:`, error.message);
@@ -163,7 +163,7 @@ async function processAnalysis(taskId, repoUrl, prNumber, githubToken) {
     const formattedCode = formatFilesForAI(files);
 
     // Step 3: Analyze with AI
-    console.log(`[Process] Sending to Claude AI for analysis...`);
+    console.log(`[Process] Sending to AI for analysis...`);
     const analysis = await analyzeCode(formattedCode, {
       repo_url: repoUrl,
       pr_number: prNumber
@@ -171,7 +171,7 @@ async function processAnalysis(taskId, repoUrl, prNumber, githubToken) {
 
     // Step 4: Store results
     taskManager.setResults(taskId, analysis);
-    console.log(`[Process] ✓ Analysis complete for task ${taskId}`);
+    console.log(`[Process] Analysis complete for task ${taskId}`);
 
   } catch (error) {
     console.error(`[Process] Analysis failed for task ${taskId}:`, error.message);
