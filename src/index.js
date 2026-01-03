@@ -1,0 +1,92 @@
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const analyzeRoutes = require('./routes/analyze');
+
+const AI_PROVIDER = process.env.AI_PROVIDER || 'gemini';
+
+
+if (AI_PROVIDER === 'gemini' && !process.env.GOOGLE_API_KEY) {
+  console.error('ERROR: GOOGLE_API_KEY is not set in .env file');
+  console.error('Get your API key from: https://makersuite.google.com/app/apikey');
+  process.exit(1);
+}
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Request logging middleware
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  next();
+});
+
+// Health check endpoint
+app.get('/', (req, res) => {
+  res.json({
+    service: 'AI Code Review Agent',
+    status: 'running',
+    version: '1.0.0',
+    endpoints: {
+      analyze: 'POST /analyze-pr',
+      status: 'GET /status/:task_id',
+      results: 'GET /results/:task_id',
+      health: 'GET /health'
+    },
+    documentation: 'See README.md for usage examples'
+  });
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
+
+//analysis routes
+app.use('/', analyzeRoutes);
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    error: 'Endpoint not found',
+    path: req.path,
+    available_endpoints: [
+      'POST /analyze-pr',
+      'GET /status/:task_id',
+      'GET /results/:task_id'
+    ]
+  });
+});
+
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error('[Server Error]:', err);
+  res.status(500).json({
+    error: 'Internal server error',
+    message: err.message
+  });
+});
+
+// Start server
+app.listen(PORT, () => {
+  console.log('='.repeat(60));
+  console.log('AI Code Review Agent Server Started');
+  console.log('='.repeat(60));
+  console.log(`Server running on: http://localhost:${PORT}`);
+  console.log(`Claude API: ${process.env.ANTHROPIC_API_KEY ? 'Configured' : 'Missing'}`);
+  console.log(`GitHub Token: ${process.env.GITHUB_TOKEN ? 'Configured' : 'Not set (optional)'}`);
+  console.log('='.repeat(60));
+  console.log('\n Available Endpoints:');
+  console.log(`   POST   http://localhost:${PORT}/analyze-pr`);
+  console.log(`   GET    http://localhost:${PORT}/status/:task_id`);
+  console.log(`   GET    http://localhost:${PORT}/results/:task_id`);
+  console.log('\n Test with: curl or Postman or the examples in test-requests.http');
+  console.log('='.repeat(60));
+});
+
+module.exports = app;

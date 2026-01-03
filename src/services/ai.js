@@ -1,0 +1,220 @@
+/**
+ * AI Service - Google Gemini Code Review
+ * Using direct HTTP requests (no SDK needed)
+ */
+
+const axios = require('axios'); // We already have this!
+
+/**
+ * Analyze code using Google Gemini API (Direct HTTP)
+ */
+async function analyzeCode(codeContent, metadata = {}) {
+  try {
+    console.log('[AI] Starting code analysis with Google Gemini...');
+
+    const prompt = buildAnalysisPrompt(codeContent, metadata);
+    
+    // Gemini API endpoint
+    const apiKey = process.env.GOOGLE_API_KEY;
+    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${apiKey}`;
+
+    // Make request to Gemini
+    const response = await axios.post(url, {
+      contents: [{
+        parts: [{
+          text: prompt
+        }]
+      }],
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: 4096,
+      }
+    }, {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 60000 // 60 second timeout
+    });
+
+    // Extract response text
+    const responseText = response.data.candidates[0].content.parts[0].text;
+    
+    console.log('[AI] Analysis completed');
+
+    // Parse the JSON response
+    const analysisResults = parseAIResponse(responseText);
+    return analysisResults;
+
+  } catch (error) {
+    console.error('[AI] Error during analysis:', error.message);
+
+    if (error.response) {
+      const status = error.response.status;
+      const errorData = error.response.data;
+      
+      if (status === 400) {
+        if (errorData.error && errorData.error.message.includes('API key')) {
+          throw new Error('Invalid Google API key. Please check your GOOGLE_API_KEY in .env file.');
+        }
+        throw new Error(`Bad request to Gemini API: ${errorData.error?.message || 'Unknown error'}`);
+      } else if (status === 429) {
+        throw new Error('Rate limit exceeded. Please try again in a few minutes.');
+      } else if (status === 403) {
+        throw new Error('API key does not have permission. Check your Gemini API settings.');
+      }
+    }
+
+    // Network errors
+    if (error.code === 'ENOTFOUND' || error.code === 'ETIMEDOUT') {
+      throw new Error('Network error. Could not reach Gemini API. Check your internet connection.');
+    }
+
+    throw new Error(`AI analysis failed: ${error.message}`);
+  }
+}
+
+/**
+ * Build the analysis prompt for Gemini
+ */
+function buildAnalysisPrompt(codeContent, metadata) {
+  return `You are an expert code reviewer. Analyze the following Pull Request changes and identify issues.
+
+**Repository:** ${metadata.repo_url || 'N/A'}
+**PR Number:** ${metadata.pr_number || 'N/A'}
+
+**Your task:**
+1. Identify BUGS (logic errors, null checks, edge cases, potential crashes)
+2. Identify STYLE issues (naming conventions, code organization, best practices)
+3. Identify PERFORMANCE issues (inefficient algorithms, memory leaks, optimization opportunities)
+4. Provide actionable suggestions for each issue
+
+**Code Changes:**
+${codeContent.substring(0, 30000)} 
+
+**Instructions:**
+- Focus on REAL issues, not nitpicks
+- For each issue, specify the exact file name and approximate line number
+- Be specific and actionable in your suggestions
+- Categorize each issue as: "bug", "style", or "performance"
+- Prioritize critical bugs over style issues
+
+**CRITICAL: Return ONLY a valid JSON object. No markdown, no code blocks, no extra text. Just this JSON format:**
+
+{
+  "files": [
+    {
+      "name": "filename.js",
+      "issues": [
+        {
+          "type": "bug",
+          "line": 42,
+          "severity": "high",
+          "description": "Clear description of the issue",
+          "suggestion": "Specific fix recommendation"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_files": 1,
+    "total_issues": 3,
+    "critical_issues": 1,
+    "bugs": 1,
+    "style_issues": 1,
+    "performance_issues": 1
+  }
+}`;
+}
+
+/**
+ * Parse AI response into structured format
+ */
+function parseAIResponse(responseText) {
+  try {
+    let cleaned = responseText.trim();
+    
+    // Remove markdown code blocks
+    cleaned = cleaned.replace(/```json\n?/g, '');
+    cleaned = cleaned.replace(/```\n?/g, '');
+    cleaned = cleaned.replace(/^json\n?/g, '');
+    
+    // Extract JSON object (Gemini sometimes adds text)
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      cleaned = jsonMatch[0];
+    }
+
+    // Parse JSON
+    const parsed = JSON.parse(cleaned);
+
+    // Validate structure
+    if (!parsed.files || !Array.isArray(parsed.files)) {
+      throw new Error('Invalid response structure: missing files array');
+    }
+
+    if (!parsed.summary) {
+      parsed.summary = generateSummary(parsed.files);
+    }
+
+    console.log(`[AI] Parsed ${parsed.summary.total_issues} issues across ${parsed.summary.total_files} files`);
+
+    return parsed;
+
+  } catch (error) {
+    console.error('[AI] Failed to parse response:', error.message);
+    console.error('[AI] Raw response (first 500 chars):', responseText.substring(0, 500));
+    
+    // Return fallback structure
+    return {
+      files: [],
+      summary: {
+        total_files: 0,
+        total_issues: 0,
+        critical_issues: 0,
+        parse_error: true
+      },
+      raw_response: responseText.substring(0, 1000),
+      error: `Failed to parse AI response: ${error.message}`
+    };
+  }
+}
+
+/**
+ * Generate summary statistics from files
+ */
+function generateSummary(files) {
+  let totalIssues = 0;
+  let criticalIssues = 0;
+  let bugs = 0;
+  let styleIssues = 0;
+  let performanceIssues = 0;
+
+  files.forEach(file => {
+    if (file.issues && Array.isArray(file.issues)) {
+      totalIssues += file.issues.length;
+      
+      file.issues.forEach(issue => {
+        if (issue.severity === 'high' || issue.severity === 'critical') {
+          criticalIssues++;
+        }
+        
+        if (issue.type === 'bug') bugs++;
+        else if (issue.type === 'style') styleIssues++;
+        else if (issue.type === 'performance') performanceIssues++;
+      });
+    }
+  });
+
+  return {
+    total_files: files.length,
+    total_issues: totalIssues,
+    critical_issues: criticalIssues,
+    bugs,
+    style_issues: styleIssues,
+    performance_issues: performanceIssues
+  };
+}
+
+module.exports = {
+  analyzeCode
+};

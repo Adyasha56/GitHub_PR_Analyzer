@@ -1,0 +1,64 @@
+### Health Check
+GET http://localhost:3000/health
+
+###
+
+### Test 1: Start Analysis (Real PR Example)
+POST http://localhost:3000/analyze-pr
+Content-Type: application/json
+
+{
+  "repo_url": "https://github.com/facebook/react",
+  "pr_number": 28676
+}
+
+### Response will give you a task_id like: "abc-123-def-456"
+### Use that task_id in the next requests!
+
+###
+
+### Test 2: Check Status (replace with your task_id)
+GET http://localhost:3000/status/abc-123-def-456
+
+###
+
+### Test 3: Get Results (replace with your task_id)
+GET http://localhost:3000/results/abc-123-def-456
+
+###
+
+### Test 4: With GitHub Token (for private repos or higher rate limits)
+POST http://localhost:3000/analyze-pr
+Content-Type: application/json
+
+{
+  "repo_url": "https://github.com/your-username/your-private-repo",
+  "pr_number": 1,
+  "github_token": "ghp_your_token_here"
+}
+
+###
+
+### Test 5: Small PR for Quick Testing
+POST http://localhost:3000/analyze-pr
+Content-Type: application/json
+
+{
+  "repo_url": "https://github.com/vercel/next.js",
+  "pr_number": 50000
+}
+
+###
+
+### CURL Examples (copy-paste into terminal):
+
+# Start analysis
+curl -X POST http://localhost:3000/analyze-pr \
+  -H "Content-Type: application/json" \
+  -d '{"repo_url": "https://github.com/facebook/react", "pr_number": 28676}'
+
+# Check status (replace task_id)
+curl http://localhost:3000/status/YOUR_TASK_ID_HERE
+
+# Get results (replace task_id)
+curl http://localhost:3000/results/YOUR_TASK_ID_HERE
