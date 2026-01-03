@@ -1,24 +1,28 @@
 /**
  * AI Service - Google Gemini Code Review
- * Using direct HTTP requests (no SDK needed)
+ * Using Gemini 2.0 Flash API
  */
 
-const axios = require('axios'); // We already have this!
+const axios = require('axios');
 
 /**
- * Analyze code using Google Gemini API (Direct HTTP)
+ * Analyze code using Google Gemini API
  */
 async function analyzeCode(codeContent, metadata = {}) {
   try {
-    console.log('[AI] Starting code analysis with Google Gemini...');
+    console.log('[AI] Starting code analysis with Google Gemini 2.0 Flash...');
 
     const prompt = buildAnalysisPrompt(codeContent, metadata);
-    
-    // Gemini API endpoint
     const apiKey = process.env.GOOGLE_API_KEY;
-    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${apiKey}`;
+    
+    if (!apiKey) {
+      throw new Error('GOOGLE_API_KEY not found in environment variables');
+    }
 
-    // Make request to Gemini
+    // Gemini 2.0 Flash endpoint
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+
+    // Make request to Gemini (using header-based auth like the cURL example)
     const response = await axios.post(url, {
       contents: [{
         parts: [{
@@ -31,15 +35,16 @@ async function analyzeCode(codeContent, metadata = {}) {
       }
     }, {
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-goog-api-key': apiKey  // KEY IN HEADER, NOT QUERY PARAM
       },
-      timeout: 60000 // 60 second timeout
+      timeout: 60000
     });
 
     // Extract response text
     const responseText = response.data.candidates[0].content.parts[0].text;
     
-    console.log('[AI] Analysis completed');
+    console.log('[AI] ✓ Analysis completed successfully');
 
     // Parse the JSON response
     const analysisResults = parseAIResponse(responseText);
@@ -52,11 +57,16 @@ async function analyzeCode(codeContent, metadata = {}) {
       const status = error.response.status;
       const errorData = error.response.data;
       
+      console.error('[AI] Response status:', status);
+      console.error('[AI] Error details:', JSON.stringify(errorData, null, 2));
+      
       if (status === 400) {
         if (errorData.error && errorData.error.message.includes('API key')) {
           throw new Error('Invalid Google API key. Please check your GOOGLE_API_KEY in .env file.');
         }
         throw new Error(`Bad request to Gemini API: ${errorData.error?.message || 'Unknown error'}`);
+      } else if (status === 404) {
+        throw new Error('Gemini model not found. Make sure gemini-2.0-flash is accessible with your API key.');
       } else if (status === 429) {
         throw new Error('Rate limit exceeded. Please try again in a few minutes.');
       } else if (status === 403) {
