@@ -1,90 +1,69 @@
 /**
- * Authentication Middleware
- * Uses Clerk for JWT verification
+ * Authentication Middleware using Clerk
+ * This file handles user authentication and attaches user data to requests
  */
 
-const { clerkMiddleware, getAuth, clerkClient } = require('@clerk/express');
+const { ClerkExpressRequireAuth } = require('@clerk/clerk-sdk-node');
 const User = require('../models/User');
 
 /**
- * Clerk middleware - validates JWT tokens
+ * Clerk JWT verification middleware
+ * Verifies the JWT token sent from the frontend
  */
-const authMiddleware = clerkMiddleware();
+const authMiddleware = ClerkExpressRequireAuth({
+  secretKey: process.env.CLERK_SECRET_KEY,
+});
 
 /**
- * Require authentication - returns 401 if not authenticated
+ * Attach user to request after Clerk verification
+ * This finds or creates the user in our MongoDB database
  */
-const requireAuth = async (req, res, next) => {
+const attachUser = async (req, res, next) => {
   try {
-    const auth = getAuth(req);
-    
-    if (!auth || !auth.userId) {
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'Authentication required'
-      });
+    // Skip if no authentication (for public routes)
+    if (!req.auth || !req.auth.userId) {
+      return next();
     }
 
-    req.auth = auth;
+    const clerkId = req.auth.userId;
+
+    // Find user in our database
+    let user = await User.findOne({ clerkId });
+
+    if (!user) {
+      // Create new user if doesn't exist
+      const sessionClaims = req.auth.sessionClaims || {};
+      
+      user = await User.create({
+        clerkId,
+        email: sessionClaims.email || sessionClaims.email_address || '',
+        name: `${sessionClaims.first_name || ''} ${sessionClaims.last_name || ''}`.trim(),
+        imageUrl: sessionClaims.image_url || sessionClaims.profile_image_url || '',
+      });
+
+      console.log(`[Auth] ✓ Created new user: ${user.email}`);
+    }
+
+    // Attach user to request object
+    req.user = user;
     next();
   } catch (error) {
-    console.error('[Auth] Error:', error.message);
-    return res.status(401).json({
-      error: 'Unauthorized',
-      message: 'Invalid authentication token'
+    console.error('[Auth] ✗ Error:', error.message);
+    res.status(500).json({ 
+      error: 'Authentication failed',
+      message: error.message 
     });
   }
 };
 
 /**
- * Get or create user from Clerk data
- * Syncs user info to MongoDB
+ * Combined middleware for protected routes
+ * Use this on any route that requires authentication
  */
-const syncUser = async (req, res, next) => {
-  try {
-    const auth = getAuth(req);
-    
-    if (!auth || !auth.userId) {
-      return next();
-    }
-
-    // Check if user exists in our DB
-    let user = await User.findOne({ clerkId: auth.userId });
-
-    if (!user) {
-      // Fetch user details from Clerk
-      try {
-        const clerkUser = await clerkClient.users.getUser(auth.userId);
-        
-        user = await User.create({
-          clerkId: auth.userId,
-          email: clerkUser.emailAddresses[0]?.emailAddress || '',
-          name: `${clerkUser.firstName || ''} ${clerkUser.lastName || ''}`.trim(),
-          imageUrl: clerkUser.imageUrl || ''
-        });
-        
-        console.log(`[Auth] New user created: ${user.email}`);
-      } catch (clerkError) {
-        console.error('[Auth] Error fetching Clerk user:', clerkError.message);
-        // Create minimal user record
-        user = await User.create({
-          clerkId: auth.userId,
-          email: 'unknown@example.com',
-          name: 'Unknown User'
-        });
-      }
-    }
-
-    req.user = user;
-    next();
-  } catch (error) {
-    console.error('[Auth] Sync user error:', error.message);
-    next(error);
-  }
-};
+const requireAuth = [authMiddleware, attachUser];
 
 module.exports = {
   authMiddleware,
-  requireAuth,
-  syncUser
+  attachUser,
+  requireAuth
 };

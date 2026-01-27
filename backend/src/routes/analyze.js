@@ -1,391 +1,144 @@
 /**
- * API Routes
- * POST   /analyze-pr      - Start new PR analysis (auth required)
- * GET    /status/:task_id - Check analysis status
- * GET    /results/:task_id - Get analysis results
- * GET    /analyses        - Get user's analysis history (auth required)
- * GET    /analyses/:id    - Get single analysis (auth required)
- * DELETE /analyses/:id    - Delete analysis (auth required)
- * GET    /stats           - Get user statistics (auth required)
+ * Analysis Routes
+ * All API endpoints for PR analysis
  */
 
-require('dotenv').config();
 const express = require('express');
-const { v4: uuidv4 } = require('uuid');
-const { getAuth } = require('@clerk/express');
-
-const { fetchPRFiles, formatFilesForAI } = require('../services/github');
-const { analyzeCodeWithAgent } = require('../services/langchain');
-const { requireAuth, syncUser } = require('../middleware/auth');
+const router = express.Router();
+const { requireAuth } = require('../middleware/auth');
 const Analysis = require('../models/Analysis');
 const User = require('../models/User');
-
-const router = express.Router();
+const { fetchPRFiles, formatFilesForAI } = require('../services/github');
+const { analyzeWithAI } = require('../services/ai');
 
 /**
- * POST /analyze-pr
- * Starts a new PR analysis - requires authentication
+ * POST /api/analyze-pr
+ * Start a new PR analysis
+ * 
+ * Body: { repoUrl: string, prNumber: number }
+ * Returns: { taskId, analysisId, status, statusUrl }
  */
-router.post('/analyze-pr', requireAuth, syncUser, async (req, res) => {
+router.post('/analyze-pr', requireAuth, async (req, res) => {
   try {
-    const { repo_url, pr_number, github_token } = req.body;
-    const userId = req.auth.userId;
+    const { repoUrl, prNumber } = req.body;
 
-    // Validate required fields
-    if (!repo_url || !pr_number) {
+    // Validation
+    if (!repoUrl || !prNumber) {
       return res.status(400).json({
-        error: 'repo_url and pr_number are required'
+        error: 'Missing required fields',
+        required: ['repoUrl', 'prNumber']
       });
     }
 
-    // Validate PR number
-    if (typeof pr_number !== 'number' || pr_number < 1 || pr_number > 999999) {
+    // Validate GitHub URL
+    if (!repoUrl.includes('github.com')) {
       return res.status(400).json({
-        error: 'pr_number must be a positive number (1-999999)'
+        error: 'Invalid GitHub repository URL'
       });
     }
 
-    // Validate and sanitize repo_url
-    if (typeof repo_url !== 'string' || repo_url.length > 200) {
-      return res.status(400).json({
-        error: 'repo_url must be a valid string (max 200 characters)'
-      });
+    // Get authenticated user
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ error: 'User not found' });
     }
 
-    // Validate GitHub URL format
-    const githubUrlPattern = /^https?:\/\/(www\.)?github\.com\/[\w-]+\/[\w.-]+\/?$/;
-    const cleanUrl = repo_url.replace('.git', '').replace(/\/$/, '');
+    // Create unique task ID
+    const taskId = `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    if (!githubUrlPattern.test(cleanUrl)) {
-      return res.status(400).json({
-        error: 'repo_url must be a valid GitHub repository URL (e.g., https://github.com/owner/repo)'
-      });
-    }
-
-    // Validate github_token if provided
-    if (github_token && (typeof github_token !== 'string' || github_token.length > 500)) {
-      return res.status(400).json({
-        error: 'github_token must be a valid string (max 500 characters)'
-      });
-    }
-
-    const taskId = uuidv4();
-
-    // Create analysis record in MongoDB
+    // Create analysis record in database
     const analysis = await Analysis.create({
       taskId,
-      userId,
-      repoUrl: cleanUrl,
-      prNumber: pr_number,
+      userId: user.clerkId,
+      repoUrl,
+      prNumber: parseInt(prNumber),
       status: 'pending',
       aiProvider: process.env.AI_PROVIDER || 'gemini'
     });
 
-    console.log(`[API] Created task ${taskId} for user ${userId}`);
+    console.log(`[API] ✓ Created analysis ${taskId} for ${user.email}`);
 
-    // Start background processing
-    processAnalysis(taskId, cleanUrl, pr_number, github_token, userId)
-      .catch(err =>
-        console.error(`[Process] Background error:`, err.message)
-      );
+    // Start analysis in background (non-blocking)
+    processAnalysis(taskId, repoUrl, prNumber, user).catch(err => {
+      console.error(`[API] ✗ Background analysis failed for ${taskId}:`, err.message);
+    });
 
+    // Return immediately - don't wait for analysis to complete
     res.status(202).json({
-      message: 'Analysis started',
-      task_id: taskId,
-      status_url: `/api/status/${taskId}`,
-      results_url: `/api/analyses/${analysis._id}`
+      message: 'Analysis started successfully',
+      taskId,
+      analysisId: analysis._id,
+      status: 'pending',
+      statusUrl: `/api/status/${taskId}`
     });
 
   } catch (error) {
-    console.error('[API] Error:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('[API] Error starting analysis:', error);
+    res.status(500).json({
+      error: 'Failed to start analysis',
+      message: error.message
+    });
   }
 });
 
 /**
- * GET /status/:task_id
- * Check analysis status - public endpoint
+ * Background processing function
+ * This runs asynchronously after the API returns
  */
-router.get('/status/:task_id', async (req, res) => {
+async function processAnalysis(taskId, repoUrl, prNumber, user) {
   try {
-    const analysis = await Analysis.findOne({ taskId: req.params.task_id })
-      .select('taskId status repoUrl repoName repoOwner prNumber createdAt completedAt error');
-    
-    if (!analysis) {
-      return res.status(404).json({
-        error: 'Task not found',
-        task_id: req.params.task_id
-      });
-    }
+    console.log(`[Analysis] 🔄 Starting ${taskId}`);
 
-    res.json({
-      task_id: analysis.taskId,
-      status: analysis.status,
-      repo_url: analysis.repoUrl,
-      repo_name: analysis.repoName,
-      pr_number: analysis.prNumber,
-      created_at: analysis.createdAt,
-      completed_at: analysis.completedAt,
-      error: analysis.error
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * GET /results/:task_id
- * Get analysis results - public endpoint (for backward compatibility)
- */
-router.get('/results/:task_id', async (req, res) => {
-  try {
-    const analysis = await Analysis.findOne({ taskId: req.params.task_id });
-    
-    if (!analysis) {
-      return res.status(404).json({
-        error: 'Task not found',
-        task_id: req.params.task_id
-      });
-    }
-
-    if (analysis.status === 'pending' || analysis.status === 'processing') {
-      return res.status(202).json({
-        task_id: analysis.taskId,
-        status: analysis.status,
-        message: 'Analysis in progress...'
-      });
-    }
-
-    if (analysis.status === 'failed') {
-      return res.status(500).json({
-        task_id: analysis.taskId,
-        status: 'failed',
-        error: analysis.error
-      });
-    }
-
-    res.json({
-      task_id: analysis.taskId,
-      status: analysis.status,
-      repo_url: analysis.repoUrl,
-      pr_number: analysis.prNumber,
-      results: analysis.results,
-      files_analyzed: analysis.filesAnalyzed,
-      issues_found: analysis.issuesFound,
-      completed_at: analysis.completedAt
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * GET /analyses
- * Get user's analysis history - requires authentication
- */
-router.get('/analyses', requireAuth, async (req, res) => {
-  try {
-    const userId = req.auth.userId;
-    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
-    const skip = parseInt(req.query.skip) || 0;
-
-    const analyses = await Analysis.find({ userId })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .select('-results'); // Exclude full results for list
-
-    const total = await Analysis.countDocuments({ userId });
-
-    res.json({
-      analyses: analyses.map(a => ({
-        id: a._id,
-        task_id: a.taskId,
-        repo_url: a.repoUrl,
-        repo_name: a.repoName,
-        repo_owner: a.repoOwner,
-        pr_number: a.prNumber,
-        status: a.status,
-        issues_found: a.issuesFound,
-        files_analyzed: a.filesAnalyzed,
-        created_at: a.createdAt,
-        completed_at: a.completedAt
-      })),
-      total,
-      limit,
-      skip
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * GET /analyses/:id
- * Get single analysis with full results - requires authentication
- */
-router.get('/analyses/:id', requireAuth, async (req, res) => {
-  try {
-    const userId = req.auth.userId;
-    const analysis = await Analysis.findOne({ 
-      _id: req.params.id,
-      userId 
-    });
-
-    if (!analysis) {
-      return res.status(404).json({ error: 'Analysis not found' });
-    }
-
-    res.json({
-      id: analysis._id,
-      task_id: analysis.taskId,
-      repo_url: analysis.repoUrl,
-      repo_name: analysis.repoName,
-      repo_owner: analysis.repoOwner,
-      pr_number: analysis.prNumber,
-      status: analysis.status,
-      results: analysis.results,
-      error: analysis.error,
-      files_analyzed: analysis.filesAnalyzed,
-      issues_found: analysis.issuesFound,
-      ai_provider: analysis.aiProvider,
-      created_at: analysis.createdAt,
-      completed_at: analysis.completedAt
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * DELETE /analyses/:id
- * Delete an analysis - requires authentication
- */
-router.delete('/analyses/:id', requireAuth, async (req, res) => {
-  try {
-    const userId = req.auth.userId;
-    const analysis = await Analysis.findOneAndDelete({ 
-      _id: req.params.id,
-      userId 
-    });
-
-    if (!analysis) {
-      return res.status(404).json({ error: 'Analysis not found' });
-    }
-
-    res.json({ message: 'Analysis deleted successfully' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * GET /stats
- * Get user statistics - requires authentication
- */
-router.get('/stats', requireAuth, async (req, res) => {
-  try {
-    const userId = req.auth.userId;
-
-    const [totalAnalyses, uniqueRepos, recentAnalyses] = await Promise.all([
-      Analysis.countDocuments({ userId }),
-      Analysis.distinct('repoUrl', { userId }).then(repos => repos.length),
-      Analysis.find({ userId })
-        .sort({ createdAt: -1 })
-        .limit(5)
-        .select('repoName prNumber status createdAt')
-    ]);
-
-    // Count by status
-    const statusCounts = await Analysis.aggregate([
-      { $match: { userId } },
-      { $group: { _id: '$status', count: { $sum: 1 } } }
-    ]);
-
-    const statusMap = {};
-    statusCounts.forEach(s => { statusMap[s._id] = s.count; });
-
-    res.json({
-      total_analyses: totalAnalyses,
-      unique_repos: uniqueRepos,
-      completed: statusMap.completed || 0,
-      failed: statusMap.failed || 0,
-      pending: (statusMap.pending || 0) + (statusMap.processing || 0),
-      recent_analyses: recentAnalyses
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * Background Worker
- * Process analysis and save to MongoDB
- */
-async function processAnalysis(taskId, repoUrl, prNumber, githubToken, userId) {
-  try {
     // Update status to processing
     await Analysis.findOneAndUpdate(
       { taskId },
       { status: 'processing' }
     );
-    console.log(`[Process] Starting task ${taskId}`);
 
-    // Get GitHub token from request or environment
-    const finalGithubToken = githubToken || process.env.GITHUB_TOKEN;
-
-    if (!finalGithubToken) {
-      throw new Error('GITHUB_TOKEN missing in environment');
-    }
-
+    // Step 1: Fetch PR files from GitHub
+    console.log(`[Analysis] 📥 Fetching PR files...`);
     const files = await fetchPRFiles(
       repoUrl,
       prNumber,
-      finalGithubToken
+      process.env.GITHUB_TOKEN
     );
 
-    const formattedCode = formatFilesForAI(files);
-
-    console.log(`[Process] Sending to LangChain agent for analysis`);
-
-    const analysis = await analyzeCodeWithAgent(formattedCode, {
-      repo_url: repoUrl,
-      pr_number: prNumber
-    });
-
-    // Calculate issues count
-    let issuesCount = 0;
-    if (analysis && analysis.files) {
-      analysis.files.forEach(file => {
-        if (file.issues) issuesCount += file.issues.length;
-      });
+    if (!files || files.length === 0) {
+      throw new Error('No files found in PR');
     }
 
-    // Update analysis with results
+    console.log(`[Analysis] ✓ Found ${files.length} files`);
+
+    // Step 2: Format files for AI
+    const formattedFiles = formatFilesForAI(files);
+
+    // Step 3: Analyze with AI
+    console.log(`[Analysis] 🤖 Analyzing with AI...`);
+    const results = await analyzeWithAI(formattedFiles);
+
+    // Step 4: Count issues found
+    const issuesFound = countIssues(results);
+
+    // Step 5: Update analysis with results
     await Analysis.findOneAndUpdate(
       { taskId },
       {
         status: 'completed',
-        results: analysis,
+        results,
         filesAnalyzed: files.length,
-        issuesFound: issuesCount,
+        issuesFound,
         completedAt: new Date()
       }
     );
 
-    // Increment user's analysis count
-    if (userId) {
-      await User.findOneAndUpdate(
-        { clerkId: userId },
-        { $inc: { analysisCount: 1 } }
-      );
-    }
+    // Step 6: Increment user's analysis count
+    await user.incrementAnalysisCount();
 
-    console.log(`[Process] Completed task ${taskId}`);
+    console.log(`[Analysis] ✅ Completed ${taskId} - Found ${issuesFound} issues in ${files.length} files`);
 
   } catch (error) {
-    console.error(`[Process] Failed task ${taskId}:`, error.message);
-    
+    console.error(`[Analysis] ❌ Failed ${taskId}:`, error.message);
+
     // Update analysis with error
     await Analysis.findOneAndUpdate(
       { taskId },
@@ -398,5 +151,271 @@ async function processAnalysis(taskId, repoUrl, prNumber, githubToken, userId) {
   }
 }
 
-module.exports = router;
+/**
+ * Helper function to count total issues
+ */
+function countIssues(results) {
+  let count = 0;
+  
+  if (!results) return 0;
+  
+  // Count code review issues
+  if (results.codeReview && Array.isArray(results.codeReview.issues)) {
+    count += results.codeReview.issues.length;
+  }
+  
+  // Count security vulnerabilities
+  if (results.securityReview && Array.isArray(results.securityReview.vulnerabilities)) {
+    count += results.securityReview.vulnerabilities.length;
+  }
+  
+  // Count suggestions
+  if (Array.isArray(results.suggestions)) {
+    count += results.suggestions.length;
+  }
+  
+  return count;
+}
 
+/**
+ * GET /api/status/:taskId
+ * Get status of a specific analysis
+ * 
+ * Returns: Full analysis object with results
+ */
+router.get('/status/:taskId', requireAuth, async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const user = req.user;
+
+    // Find analysis for this user
+    const analysis = await Analysis.findOne({
+      taskId,
+      userId: user.clerkId
+    });
+
+    if (!analysis) {
+      return res.status(404).json({ 
+        error: 'Analysis not found',
+        message: 'This analysis does not exist or does not belong to you'
+      });
+    }
+
+    // Return analysis data
+    res.json({
+      taskId: analysis.taskId,
+      status: analysis.status,
+      repoUrl: analysis.repoUrl,
+      repoName: analysis.repoName,
+      repoOwner: analysis.repoOwner,
+      prNumber: analysis.prNumber,
+      filesAnalyzed: analysis.filesAnalyzed,
+      issuesFound: analysis.issuesFound,
+      aiProvider: analysis.aiProvider,
+      results: analysis.results,
+      error: analysis.error,
+      createdAt: analysis.createdAt,
+      completedAt: analysis.completedAt
+    });
+
+  } catch (error) {
+    console.error('[API] Error fetching status:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch analysis status',
+      message: error.message 
+    });
+  }
+});
+
+/**
+ * GET /api/analyses
+ * Get all analyses for the authenticated user
+ * 
+ * Query params: ?limit=50&skip=0
+ * Returns: { analyses: [], total, hasMore }
+ */
+router.get('/analyses', requireAuth, async (req, res) => {
+  try {
+    const user = req.user;
+    const limit = parseInt(req.query.limit) || 50;
+    const skip = parseInt(req.query.skip) || 0;
+
+    // Get user's analyses
+    const analyses = await Analysis.find({ userId: user.clerkId })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .skip(skip)
+      .select('-results'); // Exclude full results for performance
+
+    // Get total count
+    const total = await Analysis.countDocuments({ userId: user.clerkId });
+
+    res.json({
+      analyses,
+      total,
+      limit,
+      skip,
+      hasMore: skip + limit < total
+    });
+
+  } catch (error) {
+    console.error('[API] Error fetching analyses:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch analyses',
+      message: error.message 
+    });
+  }
+});
+
+/**
+ * GET /api/analysis/:id
+ * Get specific analysis by MongoDB ID (with full results)
+ * 
+ * Returns: Complete analysis object
+ */
+router.get('/analysis/:id', requireAuth, async (req, res) => {
+  try {
+    const user = req.user;
+    const { id } = req.params;
+
+    // Validate MongoDB ObjectId
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ error: 'Invalid analysis ID' });
+    }
+
+    // Find analysis
+    const analysis = await Analysis.findOne({
+      _id: id,
+      userId: user.clerkId
+    });
+
+    if (!analysis) {
+      return res.status(404).json({ error: 'Analysis not found' });
+    }
+
+    res.json(analysis);
+
+  } catch (error) {
+    console.error('[API] Error fetching analysis:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch analysis',
+      message: error.message 
+    });
+  }
+});
+
+/**
+ * GET /api/stats
+ * Get user statistics and dashboard data
+ * 
+ * Returns: User info, stats, recent activity
+ */
+router.get('/stats', requireAuth, async (req, res) => {
+  try {
+    const user = req.user;
+
+    // Calculate statistics
+    const totalAnalyses = await Analysis.countDocuments({ 
+      userId: user.clerkId 
+    });
+    
+    const completedAnalyses = await Analysis.countDocuments({
+      userId: user.clerkId,
+      status: 'completed'
+    });
+    
+    const failedAnalyses = await Analysis.countDocuments({
+      userId: user.clerkId,
+      status: 'failed'
+    });
+    
+    const processingAnalyses = await Analysis.countDocuments({
+      userId: user.clerkId,
+      status: { $in: ['pending', 'processing'] }
+    });
+
+    // Get unique repositories count
+    const uniqueRepos = await Analysis.distinct('repoUrl', { 
+      userId: user.clerkId 
+    });
+
+    // Get recent analyses
+    const recentAnalyses = await Analysis.find({ 
+      userId: user.clerkId 
+    })
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .select('repoName repoOwner prNumber status createdAt issuesFound filesAnalyzed');
+
+    res.json({
+      user: {
+        id: user._id,
+        clerkId: user.clerkId,
+        name: user.name,
+        email: user.email,
+        imageUrl: user.imageUrl,
+        memberSince: user.createdAt
+      },
+      stats: {
+        totalAnalyses,
+        completedAnalyses,
+        failedAnalyses,
+        processingAnalyses,
+        uniqueRepos: uniqueRepos.length,
+        analysisCount: user.analysisCount
+      },
+      recentActivity: recentAnalyses
+    });
+
+  } catch (error) {
+    console.error('[API] Error fetching stats:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch statistics',
+      message: error.message 
+    });
+  }
+});
+
+/**
+ * DELETE /api/analysis/:id
+ * Delete an analysis (optional feature)
+ * 
+ * Returns: { message: 'Success' }
+ */
+router.delete('/analysis/:id', requireAuth, async (req, res) => {
+  try {
+    const user = req.user;
+    const { id } = req.params;
+
+    // Validate MongoDB ObjectId
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ error: 'Invalid analysis ID' });
+    }
+
+    // Find and delete
+    const analysis = await Analysis.findOneAndDelete({
+      _id: id,
+      userId: user.clerkId
+    });
+
+    if (!analysis) {
+      return res.status(404).json({ error: 'Analysis not found' });
+    }
+
+    console.log(`[API] 🗑️  Deleted analysis ${id} for ${user.email}`);
+
+    res.json({ 
+      message: 'Analysis deleted successfully',
+      deletedId: id
+    });
+
+  } catch (error) {
+    console.error('[API] Error deleting analysis:', error);
+    res.status(500).json({ 
+      error: 'Failed to delete analysis',
+      message: error.message 
+    });
+  }
+});
+
+module.exports = router;
