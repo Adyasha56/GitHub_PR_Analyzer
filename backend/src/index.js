@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const connectDB = require('./config/database');
+const { authMiddleware } = require('./middleware/auth');
 const analyzeRoutes = require('./routes/analyze');
 
 // Validate environment variables based on AI provider
@@ -25,11 +27,21 @@ if (AI_PROVIDER === 'openai' && !process.env.OPENAI_API_KEY) {
 }
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
-app.use(cors());
+// Connect to MongoDB
+connectDB();
+
+// CORS configuration for frontend
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Clerk authentication middleware
+app.use(authMiddleware);
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -42,12 +54,13 @@ app.get('/', (req, res) => {
   res.json({
     service: 'AI Code Review Agent',
     status: 'running',
-    version: '1.0.0',
+    version: '2.0.0',
     ai_provider: AI_PROVIDER,
     endpoints: {
-      analyze: 'POST /analyze-pr',
-      status: 'GET /status/:task_id',
-      results: 'GET /results/:task_id',
+      analyze: 'POST /api/analyze-pr',
+      analyses: 'GET /api/analyses',
+      status: 'GET /api/status/:task_id',
+      stats: 'GET /api/stats',
       health: 'GET /health'
     },
     documentation: 'See README.md for usage examples'
@@ -63,7 +76,10 @@ app.get('/health', (req, res) => {
   });
 });
 
-// analysis routes
+// analysis routes (with /api prefix)
+app.use('/api', analyzeRoutes);
+
+// Legacy routes (without /api prefix) - for backward compatibility
 app.use('/', analyzeRoutes);
 
 // 404 handler
@@ -72,9 +88,10 @@ app.use((req, res) => {
     error: 'Endpoint not found',
     path: req.path,
     available_endpoints: [
-      'POST /analyze-pr',
-      'GET /status/:task_id',
-      'GET /results/:task_id'
+      'POST /api/analyze-pr',
+      'GET /api/analyses',
+      'GET /api/status/:task_id',
+      'GET /api/stats'
     ]
   });
 });
@@ -108,11 +125,14 @@ app.listen(PORT, () => {
   }
   
   console.log(` GitHub Token: ${process.env.GITHUB_TOKEN ? '✓ Configured' : '✗ Not set (optional)'}`);
+  console.log(` MongoDB: ${process.env.MONGODB_URI ? '✓ Configured' : '✗ Not set'}`);
+  console.log(` Clerk Auth: ${process.env.CLERK_SECRET_KEY ? '✓ Configured' : '✗ Not set'}`);
   console.log('='.repeat(60));
   console.log('\n Available Endpoints:');
-  console.log(`   POST   http://localhost:${PORT}/analyze-pr`);
-  console.log(`   GET    http://localhost:${PORT}/status/:task_id`);
-  console.log(`   GET    http://localhost:${PORT}/results/:task_id`);
+  console.log(`   POST   http://localhost:${PORT}/api/analyze-pr`);
+  console.log(`   GET    http://localhost:${PORT}/api/analyses`);
+  console.log(`   GET    http://localhost:${PORT}/api/status/:task_id`);
+  console.log(`   GET    http://localhost:${PORT}/api/stats`);
   console.log('\n Test with: curl or Postman or the examples in test-requests.http');
   console.log('='.repeat(60));
 });

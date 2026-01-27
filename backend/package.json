@@ -13,6 +13,7 @@
   "type": "commonjs",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
+    "@clerk/express": "^1.7.65",
     "@langchain/core": "^0.1.0",
     "@langchain/google-genai": "^0.0.11",
     "axios": "^1.13.2",
@@ -20,6 +21,7 @@
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "langchain": "^0.1.0",
+    "mongoose": "^9.1.5",
     "openai": "^6.15.0",
     "uuid": "^13.0.0"
   },
