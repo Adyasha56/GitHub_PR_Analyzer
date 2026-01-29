@@ -21,14 +21,12 @@ class TaskManager {
   createTask(taskId, metadata = {}) {
     // Check if we've hit the limit
     if (this.tasks.size >= this.MAX_TASKS) {
-      console.log('[TaskManager] Max tasks reached, cleaning up...');
       this.cleanupOldTasks();
 
       // If still at max after cleanup, remove oldest
       if (this.tasks.size >= this.MAX_TASKS) {
         const oldestKey = this.tasks.keys().next().value;
         this.tasks.delete(oldestKey);
-        console.log(`[TaskManager] Removed oldest task: ${oldestKey}`);
       }
     }
 
@@ -168,7 +166,6 @@ const taskManagerInstance = new TaskManager();
 // Auto-cleanup old tasks every hour to prevent memory leak
 setInterval(() => {
   taskManagerInstance.cleanupOldTasks();
-  console.log('[TaskManager] Cleaned up old tasks');
 }, 3600000); // Run every 1 hour
 
 module.exports = taskManagerInstance;

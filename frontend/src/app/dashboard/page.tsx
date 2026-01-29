@@ -28,7 +28,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadDashboard();
-  });
+  }, []);
 
   const loadDashboard = async () => {
     try {

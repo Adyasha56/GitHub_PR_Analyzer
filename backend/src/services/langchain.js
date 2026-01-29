@@ -16,8 +16,6 @@ async function analyzeCodeWithAgent(codeContent, metadata = {}) {
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`[LangChain] Starting agent-based code analysis... (Attempt ${attempt}/${maxRetries})`);
-
       // Initialize LLM with Google Gemini
       const llm = new ChatGoogleGenerativeAI({
         modelName: "gemini-2.0-flash",
@@ -41,8 +39,6 @@ async function analyzeCodeWithAgent(codeContent, metadata = {}) {
       // Invoke the LLM through LangChain
       const response = await llm.invoke(messages);
 
-      console.log('[LangChain] ✓ Agent analysis completed successfully');
-
       // Parse and validate the response
       const analysisResults = parseAIResponse(response.content);
 
@@ -55,7 +51,6 @@ async function analyzeCodeWithAgent(codeContent, metadata = {}) {
 
     } catch (error) {
       lastError = error;
-      console.error(`[LangChain] Attempt ${attempt} failed:`, error.message);
 
       // Don't retry on certain errors
       if (error.message.includes('API key') || error.message.includes('quota')) {
@@ -65,14 +60,12 @@ async function analyzeCodeWithAgent(codeContent, metadata = {}) {
       // Wait before retrying (exponential backoff)
       if (attempt < maxRetries) {
         const waitTime = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
-        console.log(`[LangChain] Retrying in ${waitTime/1000}s...`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
       }
     }
   }
 
   // All retries failed
-  console.error('[LangChain] All retry attempts failed');
 
   if (lastError.message.includes('API key')) {
     throw new Error('Invalid API key. Check your environment variables.');
@@ -168,14 +161,9 @@ function parseAIResponse(responseText) {
       parsed.summary = generateSummary(parsed.files);
     }
 
-    console.log(`[LangChain] Parsed ${parsed.summary.total_issues} issues across ${parsed.summary.total_files} files`);
-
     return parsed;
 
   } catch (error) {
-    console.error('[LangChain] Failed to parse response:', error.message);
-    console.error('[LangChain] Raw response (first 500 chars):', responseText.substring(0, 500));
-
     // Return fallback structure instead of crashing
     return {
       files: [],

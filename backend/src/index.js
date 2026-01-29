@@ -1,44 +1,32 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const { clerkMiddleware } = require('@clerk/express');
 const connectDB = require('./config/database');
 const analyzeRoutes = require('./routes/analyze');
 
-// Validate environment variables based on AI provider
 const AI_PROVIDER = process.env.AI_PROVIDER || 'gemini';
 
-// Check AI provider API keys
+// Validate required environment variables
 if (AI_PROVIDER === 'openai' && !process.env.OPENAI_API_KEY) {
-  console.error(' ERROR: OPENAI_API_KEY is not set in .env file');
-  console.error('Get your API key from: https://platform.openai.com/api-keys');
+  console.error('ERROR: OPENAI_API_KEY is not set');
   process.exit(1);
 } else if (AI_PROVIDER === 'gemini' && !process.env.GOOGLE_API_KEY) {
-  console.error(' ERROR: GOOGLE_API_KEY is not set in .env file');
-  console.error('Get your API key from: https://makersuite.google.com/app/apikey');
+  console.error('ERROR: GOOGLE_API_KEY is not set');
   process.exit(1);
 } else if (AI_PROVIDER === 'grok' && !process.env.XAI_API_KEY && !process.env.GROK_API_KEY) {
-  console.error(' ERROR: XAI_API_KEY or GROK_API_KEY is not set in .env file');
-  console.error('Get your API key from: https://console.x.ai/');
+  console.error('ERROR: XAI_API_KEY or GROK_API_KEY is not set');
   process.exit(1);
 } else if (AI_PROVIDER === 'claude' && !process.env.ANTHROPIC_API_KEY) {
-  console.error(' ERROR: ANTHROPIC_API_KEY is not set in .env file');
-  console.error('Get your API key from: https://console.anthropic.com/');
+  console.error('ERROR: ANTHROPIC_API_KEY is not set');
   process.exit(1);
-}
-
-// Check Clerk authentication
-if (!process.env.CLERK_SECRET_KEY) {
-  console.warn('WARNING: CLERK_SECRET_KEY is not set - Authentication will not work!');
-  console.warn('Get your keys from: https://dashboard.clerk.com/');
 }
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Connect to MongoDB
 connectDB();
 
-// CORS configuration - Allow frontend to access API
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   credentials: true,
@@ -46,144 +34,53 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Body parser middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(clerkMiddleware());
 
-// Request logging middleware
-app.use((req, res, next) => {
-  const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] ${req.method} ${req.path}`);
-  next();
-});
-
-// Root endpoint - Service info
+// Root endpoint
 app.get('/', (req, res) => {
   res.json({
     service: 'GitHub PR Analyzer API',
     status: 'running',
     version: '2.0.0',
-    ai_provider: AI_PROVIDER,
-    authentication: 'Clerk',
-    endpoints: {
-      analyze: 'POST /api/analyze-pr',
-      status: 'GET /api/status/:task_id',
-      analyses: 'GET /api/analyses',
-      analysis: 'GET /api/analysis/:id',
-      stats: 'GET /api/stats',
-      delete: 'DELETE /api/analysis/:id',
-      health: 'GET /health'
-    },
-    documentation: 'All endpoints require Clerk authentication token'
+    ai_provider: AI_PROVIDER
   });
 });
 
-// Health check endpoint - No auth required
+// Health check
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'healthy', 
-    timestamp: new Date().toISOString(),
-    ai_provider: AI_PROVIDER,
-    database: 'connected',
-    auth: process.env.CLERK_SECRET_KEY ? 'configured' : 'not configured'
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString()
   });
 });
 
-// Mount API routes (all protected by auth middleware in routes file)
+// API routes
 app.use('/api', analyzeRoutes);
-
-// Legacy routes (without /api prefix) - for backward compatibility
 app.use('/', analyzeRoutes);
 
-// 404 handler - Route not found
+// 404 handler
 app.use((req, res) => {
-  res.status(404).json({
-    error: 'Endpoint not found',
-    path: req.path,
-    method: req.method,
-    available_endpoints: [
-      'POST /api/analyze-pr',
-      'GET /api/analyses',
-      'GET /api/analysis/:id',
-      'GET /api/status/:task_id',
-      'GET /api/stats',
-      'DELETE /api/analysis/:id',
-      'GET /health'
-    ],
-    note: 'All endpoints (except /health) require Clerk authentication'
-  });
+  res.status(404).json({ error: 'Endpoint not found' });
 });
 
-// Global error handler
+// Error handler
 app.use((err, req, res, next) => {
-  console.error('[Server Error]:', err);
-  
-  // Handle Clerk authentication errors
-  if (err.name === 'ClerkAPIError' || err.message.includes('clerk')) {
-    return res.status(401).json({
-      error: 'Authentication failed',
-      message: 'Invalid or missing authentication token',
-      hint: 'Make sure you are logged in and your token is valid'
-    });
+  if (err.name === 'ClerkAPIError' || err.message?.includes('clerk')) {
+    return res.status(401).json({ error: 'Authentication failed' });
   }
-  
-  res.status(500).json({
-    error: 'Internal server error',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
-  });
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 // Start server
-app.listen(PORT, () => {
-  console.log('='.repeat(70));
-  console.log('GitHub PR Analyzer API Server Started');
-  console.log('='.repeat(70));
-  console.log(`Server URL:        http://localhost:${PORT}`);
-  console.log(`AI Provider:       ${AI_PROVIDER.toUpperCase()}`);
-  console.log(` Environment:       ${process.env.NODE_ENV || 'development'}`);
-  console.log('─'.repeat(70));
-  
-  // Show configuration status
-  console.log('Configuration Status:');
-  
-  // AI Provider status
-  if (AI_PROVIDER === 'grok') {
-    console.log(`   Grok API:          ${(process.env.XAI_API_KEY || process.env.GROK_API_KEY) ? 'Configured' : 'Missing'}`);
-  } else if (AI_PROVIDER === 'gemini') {
-    console.log(`   Gemini API:        ${process.env.GOOGLE_API_KEY ? 'Configured' : 'Missing'}`);
-  } else if (AI_PROVIDER === 'openai') {
-    console.log(`   OpenAI API:        ${process.env.OPENAI_API_KEY ? 'Configured' : 'Missing'}`);
-  } else if (AI_PROVIDER === 'claude') {
-    console.log(`   Claude API:        ${process.env.ANTHROPIC_API_KEY ? 'Configured' : 'Missing'}`);
-  }
-  
-  console.log(`   GitHub Token:      ${process.env.GITHUB_TOKEN ? 'Configured' : 'Optional'}`);
-  console.log(`   MongoDB:           ${process.env.MONGODB_URI ? 'Connected' : 'Not configured'}`);
-  console.log(`   Clerk Auth:        ${process.env.CLERK_SECRET_KEY ? 'Configured' : 'Not configured'}`);
-  console.log(`   Frontend URL:      ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
-  
-  console.log('─'.repeat(70));
-  console.log('Available Endpoints:');
-  console.log(`   POST   http://localhost:${PORT}/api/analyze-pr`);
-  console.log(`   GET    http://localhost:${PORT}/api/analyses`);
-  console.log(`   GET    http://localhost:${PORT}/api/analysis/:id`);
-  console.log(`   GET    http://localhost:${PORT}/api/status/:task_id`);
-  console.log(`   GET    http://localhost:${PORT}/api/stats`);
-  console.log(`   DELETE http://localhost:${PORT}/api/analysis/:id`);
-  console.log(`   GET    http://localhost:${PORT}/health`);
-  console.log('─'.repeat(70));
-  console.log(' Note: All endpoints require Clerk authentication (except /health)');
-  console.log('Test with: curl, Postman, or test-request.http');
-  console.log('='.repeat(70));
+const server = app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT} | AI: ${AI_PROVIDER}`);
 });
 
-// Handle graceful shutdown
+// Graceful shutdown
 process.on('SIGTERM', () => {
-  console.log('SIGTERM signal received: closing HTTP server');
-  server.close(() => {
-    console.log('HTTP server closed');
-    process.exit(0);
-  });
+  server.close(() => process.exit(0));
 });
 
 module.exports = app;

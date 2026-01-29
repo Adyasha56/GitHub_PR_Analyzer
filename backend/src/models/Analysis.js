@@ -72,7 +72,7 @@ const analysisSchema = new mongoose.Schema({
 analysisSchema.index({ userId: 1, createdAt: -1 });
 
 // Extract repo name and owner from URL before saving
-analysisSchema.pre('save', function(next) {
+analysisSchema.pre('save', function() {
   if (this.repoUrl && (!this.repoName || !this.repoOwner)) {
     try {
       const urlParts = this.repoUrl.replace('https://github.com/', '').split('/');
@@ -82,7 +82,6 @@ analysisSchema.pre('save', function(next) {
       // Ignore parsing errors
     }
   }
-  next();
 });
 
 // Static method to get user's analysis count

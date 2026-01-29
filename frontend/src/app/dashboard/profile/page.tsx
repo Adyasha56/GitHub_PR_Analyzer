@@ -25,7 +25,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     loadProfile();
-  });
+  }, []);
 
   const loadProfile = async () => {
     try {

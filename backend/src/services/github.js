@@ -8,44 +8,37 @@ const axios = require('axios');
  * Fetch files changed in a Pull Request
  */
 async function fetchPRFiles(repoUrl, prNumber, githubToken) {
+  if (!githubToken) {
+    throw new Error('GitHub token is required');
+  }
+
+  const urlParts = repoUrl.replace('https://github.com/', '').split('/');
+  if (urlParts.length < 2) {
+    throw new Error('Invalid GitHub repository URL');
+  }
+
+  const owner = urlParts[0];
+  const repo = urlParts[1].replace('.git', '');
+  const apiUrl = `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}/files`;
+
   try {
-    if (!githubToken) {
-      throw new Error('GitHub token is required');
-    }
-
-    // Extract owner & repo
-    const urlParts = repoUrl.replace('https://github.com/', '').split('/');
-    if (urlParts.length < 2) {
-      throw new Error('Invalid GitHub repository URL');
-    }
-
-    const owner = urlParts[0];
-    const repo = urlParts[1].replace('.git', '');
-
-    const apiUrl = `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}/files`;
-
-    console.log(`[GitHub] Fetching PR #${prNumber} from ${owner}/${repo}`);
-    console.log(`[GitHub] Auth token: PRESENT`);
-
     const response = await axios.get(apiUrl, {
       headers: {
         Accept: 'application/vnd.github.v3+json',
         'User-Agent': 'AI-Code-Reviewer',
         Authorization: `Bearer ${githubToken}`
       },
-      timeout: 30000, // Increased to 30s for large repos
-      maxContentLength: 50 * 1024 * 1024 // 50MB limit
+      timeout: 30000,
+      maxContentLength: 50 * 1024 * 1024
     });
 
-    console.log(`[GitHub] Successfully fetched ${response.data.length} files`);
-
     // Limit number of files to prevent memory issues
-    if (response.data.length > 100) {
-      console.warn(`[GitHub] PR has ${response.data.length} files, limiting to first 100`);
-      response.data = response.data.slice(0, 100);
+    let files = response.data;
+    if (files.length > 100) {
+      files = files.slice(0, 100);
     }
 
-    return response.data.map(file => ({
+    return files.map(file => ({
       filename: file.filename,
       status: file.status,
       additions: file.additions,
@@ -56,28 +49,21 @@ async function fetchPRFiles(repoUrl, prNumber, githubToken) {
     }));
 
   } catch (error) {
-    console.error('[GitHub] Error:', error.response?.status, error.message);
-
     if (error.response?.status === 404) {
       throw new Error('Pull request not found');
     }
-
     if (error.response?.status === 401 || error.response?.status === 403) {
       throw new Error('GitHub authentication failed. Invalid or missing token.');
     }
-
     if (error.response?.status === 422) {
       throw new Error('Invalid request. Check the PR number.');
     }
-
     if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
       throw new Error('GitHub API timeout. The repository might be too large.');
     }
-
     if (error.code === 'ENOTFOUND') {
       throw new Error('Network error. Cannot reach GitHub API.');
     }
-
     throw new Error(`Failed to fetch PR: ${error.message}`);
   }
 }

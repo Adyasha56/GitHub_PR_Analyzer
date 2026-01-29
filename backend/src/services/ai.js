@@ -9,20 +9,16 @@ const axios = require('axios');
  * Analyze code using Google Gemini API
  */
 async function analyzeCode(codeContent, metadata = {}) {
+  const prompt = buildAnalysisPrompt(codeContent, metadata);
+  const apiKey = process.env.GOOGLE_API_KEY;
+
+  if (!apiKey) {
+    throw new Error('GOOGLE_API_KEY not found in environment variables');
+  }
+
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+
   try {
-    console.log('[AI] Starting code analysis with Google Gemini 2.0 Flash...');
-
-    const prompt = buildAnalysisPrompt(codeContent, metadata);
-    const apiKey = process.env.GOOGLE_API_KEY;
-    
-    if (!apiKey) {
-      throw new Error('GOOGLE_API_KEY not found in environment variables');
-    }
-
-    // Gemini 2.0 Flash endpoint
-    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
-
-    // Make request to Gemini (using header-based auth like the cURL example)
     const response = await axios.post(url, {
       contents: [{
         parts: [{
@@ -36,32 +32,21 @@ async function analyzeCode(codeContent, metadata = {}) {
     }, {
       headers: {
         'Content-Type': 'application/json',
-        'X-goog-api-key': apiKey  // KEY IN HEADER, NOT QUERY PARAM
+        'X-goog-api-key': apiKey
       },
       timeout: 60000
     });
 
-    // Extract response text
     const responseText = response.data.candidates[0].content.parts[0].text;
-    
-    console.log('[AI] ✓ Analysis completed successfully');
-
-    // Parse the JSON response
-    const analysisResults = parseAIResponse(responseText);
-    return analysisResults;
+    return parseAIResponse(responseText);
 
   } catch (error) {
-    console.error('[AI] Error during analysis:', error.message);
-
     if (error.response) {
       const status = error.response.status;
       const errorData = error.response.data;
-      
-      console.error('[AI] Response status:', status);
-      console.error('[AI] Error details:', JSON.stringify(errorData, null, 2));
-      
+
       if (status === 400) {
-        if (errorData.error && errorData.error.message.includes('API key')) {
+        if (errorData.error?.message?.includes('API key')) {
           throw new Error('Invalid Google API key. Please check your GOOGLE_API_KEY in .env file.');
         }
         throw new Error(`Bad request to Gemini API: ${errorData.error?.message || 'Unknown error'}`);
@@ -74,7 +59,6 @@ async function analyzeCode(codeContent, metadata = {}) {
       }
     }
 
-    // Network errors
     if (error.code === 'ENOTFOUND' || error.code === 'ETIMEDOUT') {
       throw new Error('Network error. Could not reach Gemini API. Check your internet connection.');
     }
@@ -99,7 +83,7 @@ function buildAnalysisPrompt(codeContent, metadata) {
 4. Provide actionable suggestions for each issue
 
 **Code Changes:**
-${codeContent.substring(0, 30000)} 
+${codeContent.substring(0, 30000)}
 
 **Instructions:**
 - Focus on REAL issues, not nitpicks
@@ -142,22 +126,18 @@ ${codeContent.substring(0, 30000)}
 function parseAIResponse(responseText) {
   try {
     let cleaned = responseText.trim();
-    
-    // Remove markdown code blocks
+
     cleaned = cleaned.replace(/```json\n?/g, '');
     cleaned = cleaned.replace(/```\n?/g, '');
     cleaned = cleaned.replace(/^json\n?/g, '');
-    
-    // Extract JSON object (Gemini sometimes adds text)
+
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       cleaned = jsonMatch[0];
     }
 
-    // Parse JSON
     const parsed = JSON.parse(cleaned);
 
-    // Validate structure
     if (!parsed.files || !Array.isArray(parsed.files)) {
       throw new Error('Invalid response structure: missing files array');
     }
@@ -166,15 +146,9 @@ function parseAIResponse(responseText) {
       parsed.summary = generateSummary(parsed.files);
     }
 
-    console.log(`[AI] Parsed ${parsed.summary.total_issues} issues across ${parsed.summary.total_files} files`);
-
     return parsed;
 
   } catch (error) {
-    console.error('[AI] Failed to parse response:', error.message);
-    console.error('[AI] Raw response (first 500 chars):', responseText.substring(0, 500));
-    
-    // Return fallback structure
     return {
       files: [],
       summary: {
@@ -202,12 +176,12 @@ function generateSummary(files) {
   files.forEach(file => {
     if (file.issues && Array.isArray(file.issues)) {
       totalIssues += file.issues.length;
-      
+
       file.issues.forEach(issue => {
         if (issue.severity === 'high' || issue.severity === 'critical') {
           criticalIssues++;
         }
-        
+
         if (issue.type === 'bug') bugs++;
         else if (issue.type === 'style') styleIssues++;
         else if (issue.type === 'performance') performanceIssues++;

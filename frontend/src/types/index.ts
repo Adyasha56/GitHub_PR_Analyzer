@@ -17,8 +17,16 @@ export interface Analysis {
   completedAt: string | null;
 }
 
+interface summaryInternals {
+  total_issues: number;
+  critical_issues: number;
+  bugs: number;
+  total_files:number;
+  style_issues: number;
+}
+
 export interface AnalysisResults {
-  summary?: string;
+  summary?: summaryInternals;
   codeReview?: {
     score?: number;
     issues?: Array<{
@@ -37,6 +45,8 @@ export interface AnalysisResults {
     }>;
   };
   suggestions?: string[];
+  files: any[];
+  raw_response: string;
 }
 
 // User Stats Types
