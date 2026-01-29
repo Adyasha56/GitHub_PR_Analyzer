@@ -102,16 +102,23 @@ async function processAnalysis(taskId, repoUrl, prNumber, user) {
       }
     );
 
-    await user.incrementAnalysisCount();
+    // await user.incrementAnalysisCount();   //bug
+    await User.updateOne(
+  { clerkId: user.clerkId },
+  { $inc: { analysisCount: 1 } }
+);
+
 
   } catch (error) {
     await Analysis.findOneAndUpdate(
       { taskId },
       {
-        status: 'failed',
-        error: error.message,
-        completedAt: new Date()
+       set: {
+      status: 'failed',
+      error: String(error.message),
+      completedAt: new Date()
       }
+    }
     );
   }
 }
@@ -247,28 +254,46 @@ router.get('/analysis/:id', requireAuth, async (req, res) => {
 /**
  * GET /api/stats
  */
-router.get('/stats', requireAuth, async (req, res) => {
+router.get("/stats", requireAuth, async (req, res) => {
   try {
     const user = req.user;
+    const userId = user.clerkId;
 
-    const totalAnalyses = await Analysis.countDocuments({ userId: user.clerkId });
-    const completedAnalyses = await Analysis.countDocuments({ userId: user.clerkId, status: 'completed' });
-    const failedAnalyses = await Analysis.countDocuments({ userId: user.clerkId, status: 'failed' });
-    const processingAnalyses = await Analysis.countDocuments({ userId: user.clerkId, status: { $in: ['pending', 'processing'] } });
-    const uniqueRepos = await Analysis.distinct('repoUrl', { userId: user.clerkId });
+    const [
+      totalAnalyses,
+      completedAnalyses,
+      failedAnalyses,
+      processingAnalyses,
+      uniqueReposRaw,
+      recentAnalysesRaw
+    ] = await Promise.all([
+      Analysis.countDocuments({ userId }),
+      Analysis.countDocuments({ userId, status: "completed" }),
+      Analysis.countDocuments({ userId, status: "failed" }),
+      Analysis.countDocuments({ userId, status: { $in: ["pending", "processing"] } }),
+      Analysis.distinct("repoUrl", { userId }),
+      Analysis.find({ userId })
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .select("repoUrl prNumber status createdAt issuesFound filesAnalyzed")
+    ]);
 
-    const recentAnalyses = await Analysis.find({ userId: user.clerkId })
-      .sort({ createdAt: -1 })
-      .limit(5)
-      .select('repoName repoOwner prNumber status createdAt issuesFound filesAnalyzed');
+    const recentAnalyses = recentAnalysesRaw.map(a => ({
+      repoUrl: a.repoUrl || "",
+      prNumber: a.prNumber || 0,
+      status: a.status || "unknown",
+      createdAt: a.createdAt,
+      issuesFound: a.issuesFound || 0,
+      filesAnalyzed: a.filesAnalyzed || 0
+    }));
 
     res.json({
       user: {
         id: user._id,
         clerkId: user.clerkId,
-        name: user.name,
-        email: user.email,
-        imageUrl: user.imageUrl,
+        name: user.name || "",
+        email: user.email || "",
+        imageUrl: user.imageUrl || "",
         memberSince: user.createdAt
       },
       stats: {
@@ -276,19 +301,20 @@ router.get('/stats', requireAuth, async (req, res) => {
         completedAnalyses,
         failedAnalyses,
         processingAnalyses,
-        uniqueRepos: uniqueRepos.length,
-        analysisCount: user.analysisCount
+        uniqueRepos: Array.isArray(uniqueReposRaw) ? uniqueReposRaw.length : 0,
+        analysisCount: user.analysisCount || 0
       },
       recentActivity: recentAnalyses
     });
-
   } catch (error) {
+    console.error("STATS API FAILED:", error);
     res.status(500).json({
-      error: 'Failed to fetch statistics',
+      error: "Failed to fetch statistics",
       message: error.message
     });
   }
 });
+
 
 /**
  * DELETE /api/analysis/:id

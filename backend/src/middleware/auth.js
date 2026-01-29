@@ -50,13 +50,18 @@ const attachUser = async (req, res, next) => {
         sessionClaims.imageUrl ||
         '';
 
-      user = await User.create({
+    const created = await User.create({
         clerkId,
         email,
         name: fullName,
         imageUrl,
       });
+
+      
+      // Re-fetch from Mongo so indexes + doc are fully ready
+      user = await User.findById(created._id);
     }
+    
 
     // Attach user to request object
     req.user = user;
