@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   XCircle,
   Bug,
+  Copy,
   Lightbulb,
 } from "lucide-react";
 import { api, setAuthToken } from "@/src/lib/api";
@@ -30,8 +31,49 @@ export default function AnalysisDetailPage() {
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const analysisId = params.id as string;
+
+  const copyResponseToClipboard = () => {
+    // JSON Format (Current)
+    const resultsText = JSON.stringify(analysis?.results, null, 2);
+    navigator.clipboard.writeText(resultsText);
+    
+    // Plain Text Format (Commented - Uncomment to use)
+    // const results = analysis?.results;
+    // const files = results?.files || [];
+    // const summary = results?.summary || {};
+    // 
+    // let plainText = `PR Analysis Report\n`;
+    // plainText += `Repository: ${analysis?.repoOwner}/${analysis?.repoName}\n`;
+    // plainText += `PR #${analysis?.prNumber}\n\n`;
+    // plainText += `=== SUMMARY ===\n`;
+    // plainText += `Total Files: ${summary?.total_files || 0}\n`;
+    // plainText += `Total Issues: ${summary?.total_issues || 0}\n`;
+    // plainText += `Bugs: ${summary?.bugs || 0}\n`;
+    // plainText += `Performance Issues: ${summary?.performance_issues || 0}\n`;
+    // plainText += `Style Issues: ${summary?.style_issues || 0}\n\n`;
+    // 
+    // plainText += `=== ISSUES BY FILE ===\n\n`;
+    // files.forEach((file: any) => {
+    //   plainText += ` ${file.name}\n`;
+    //   plainText += `   Issues: ${file.issues?.length || 0}\n\n`;
+    //   
+    //   file.issues?.forEach((issue: any, idx: number) => {
+    //     plainText += `   ${idx + 1}. [${issue.type?.toUpperCase()}] ${issue.severity?.toUpperCase()}\n`;
+    //     if (issue.line) plainText += `      Line: ${issue.line}\n`;
+    //     plainText += `      ${issue.description}\n`;
+    //     if (issue.suggestion) plainText += `       ${issue.suggestion}\n`;
+    //     plainText += `\n`;
+    //   });
+    // });
+    // 
+    // navigator.clipboard.writeText(plainText);
+    
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   useEffect(() => {
     loadAnalysis();
@@ -197,10 +239,30 @@ export default function AnalysisDetailPage() {
           {/* Summary */}
           {summary && (
             <Card className="p-6">
-              <h3 className="font-semibold mb-4 flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-green-500" />
-                Analysis Summary
-              </h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-green-500" />
+                  Analysis Summary
+                </h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={copyResponseToClipboard}
+                  className="gap-2"
+                >
+                  {copied ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      Copy Results
+                    </>
+                  )}
+                </Button>
+              </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div>
                   <span className="text-muted-foreground">Total Files:</span>
@@ -288,7 +350,27 @@ export default function AnalysisDetailPage() {
           {/* Raw Response (fallback) */}
           {results.raw_response && (
             <Card className="p-6">
-              <h3 className="font-semibold mb-4">Raw AI Response</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold">Raw AI Response</h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={copyResponseToClipboard}
+                  className="gap-2"
+                >
+                  {copied ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      Copy Response
+                    </>
+                  )}
+                </Button>
+              </div>
               <pre className="bg-secondary p-4 rounded-lg overflow-x-auto text-xs">
                 {results.raw_response}
               </pre>
