@@ -102,7 +102,16 @@ export default function NewAnalysisPage() {
               type="text"
               placeholder="https://github.com/facebook/react"
               value={repoUrl}
-              onChange={(e) => setRepoUrl(e.target.value)}
+              onChange={(e) => {
+                const url = e.target.value;
+                setRepoUrl(url);
+                
+                // Auto-extract PR number from URL
+                const prMatch = url.match(/github\.com\/[^\/]+\/[^\/]+\/pull\/(\d+)/);
+                if (prMatch && prMatch[1]) {
+                  setPrNumber(prMatch[1]);
+                }
+              }}
               disabled={loading}
             />
             <p className="text-xs text-muted-foreground">
