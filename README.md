@@ -1,6 +1,6 @@
-# GitHub PR Analyzer
+# Previo - AI-Powered PR Reviewer
 
-A full-stack AI-powered code review system that analyzes GitHub Pull Requests using Google Gemini and LangChain. Features a modern Next.js frontend with real-time analysis tracking and comprehensive backend API.
+A full-stack AI-powered code review system that analyzes GitHub Pull Requests using Google Gemini and LangChain. Features a modern Next.js frontend with real-time analysis tracking, dark/light theme support, and comprehensive backend API.
 
 **Backend deployed link:** https://github-pr-analyzer.onrender.com
 **Live Demo:** https://git-hub-pr-analyzer.vercel.app/
@@ -10,16 +10,28 @@ A full-stack AI-powered code review system that analyzes GitHub Pull Requests us
 ### Core Features
 - **Automated PR Analysis** - Fetches and analyzes GitHub Pull Request changes with AI insights
 - **AI-Powered Review** - Google Gemini 2.0 Flash via LangChain agent framework
+- **Multi-Model Support** - Compatible with GPT-4, Gemini, Claude, and Grok
 - **Async Processing** - Non-blocking task execution with real-time status tracking
 - **Intelligent Feedback** - Identifies bugs, style issues, and performance problems
 - **Robust & Reliable** - Retry logic, input validation, comprehensive error handling
 
 ### Frontend Features
-- **Modern UI** - Built with Next.js 15 and TailwindCSS
+- **Modern UI** - Built with Next.js 15 and TailwindCSS with purple theme
+- **Dark/Light Mode** - Seamless theme switching with localStorage persistence
+- **Auto-Extract PR Number** - Automatically extracts PR number from GitHub URLs
+- **Copy Response** - One-click copy of analysis results (JSON format)
 - **Real-time Updates** - Live status tracking for PR analysis
 - **User Authentication** - Secure sign-in/sign-up with Clerk
 - **Dashboard** - View analysis history and detailed results
+- **Animated UI** - Grid backgrounds, floating orbs, and smooth transitions
 - **Responsive Design** - Mobile-friendly interface
+
+### UX Enhancements
+- **Smart URL Parser** - Paste full GitHub PR URL and auto-fills PR number
+- **Copy to Clipboard** - Export analysis results with a single click
+- **Visual Feedback** - Animated gradients, pulsing indicators, and hover effects
+- **Theme Toggle** - Purple-themed light and dark modes
+- **Smooth Animations** - Staggered fade-in effects and floating elements
 
 ---
 
