@@ -18,36 +18,30 @@ import {
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden">
-      {/* Animated Grid Background with Radial Gradient */}
-      <div className="absolute inset-0 -z-10">
-        {/* Grid Lines - More Visible */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#8b5cf630_1px,transparent_1px),linear-gradient(to_bottom,#8b5cf630_1px,transparent_1px)] bg-[size:4rem_4rem] dark:bg-[linear-gradient(to_right,#a78bfa30_1px,transparent_1px),linear-gradient(to_bottom,#a78bfa30_1px,transparent_1px)] animate-grid-fade" />
-        
-        {/* Radial Gradient Overlay */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(139,92,246,0.15),transparent_50%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(167,139,250,0.15),transparent_50%)]" />
-        
-        {/* Fade edges */}
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-background" />
+    <div className="min-h-screen bg-background relative">
+      {/* Grid Background - Always visible */}
+      <div className="fixed inset-0 -z-10">
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#d1d5db_1px,transparent_1px),linear-gradient(to_bottom,#d1d5db_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,#3f3f46_1px,transparent_1px),linear-gradient(to_bottom,#3f3f46_1px,transparent_1px)] bg-[size:4rem_4rem]" />
       </div>
 
       {/* Navbar */}
       <nav className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="container mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shadow-lg shadow-primary/20">
+            {/* <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shadow-lg shadow-primary/20">
               <Sparkles className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <span className="text-xl font-bold text-foreground">Previo</span>
+            </div> */}
+            <span className="text-lg sm:text-xl font-bold text-foreground">Previo</span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <ThemeToggle />
             <Link href="/sign-in">
-              <Button variant="ghost" className="text-foreground">Sign In</Button>
+              <Button variant="ghost" className="text-foreground text-sm sm:text-base">Sign In</Button>
             </Link>
             <Link href="/sign-up">
-              <Button className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20">
-                Get Started
+              <Button className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20 text-sm sm:text-base">
+                <span className="hidden sm:inline">Get Started</span>
+                <span className="sm:hidden">Start</span>
               </Button>
             </Link>
           </div>
@@ -55,18 +49,22 @@ export default function HomePage() {
       </nav>
 
       {/* Hero Section */}
-      <section className="container mx-auto px-6 py-20 md:py-28 relative">
-        {/* Floating orbs */}
-        <div className="absolute top-20 left-10 w-72 h-72 bg-primary/20 rounded-full blur-3xl animate-float" />
-        <div className="absolute bottom-20 right-10 w-96 h-96 bg-purple-400/20 rounded-full blur-3xl animate-float" style={{ animationDelay: '2s' }} />
+      <section className="relative overflow-hidden">
+        {/* Radial Glow at Bottom - Dark mode only */}
+        <div className="absolute inset-x-0 bottom-0 h-[500px] dark:bg-[radial-gradient(ellipse_at_bottom,rgba(167,139,250,0.2),transparent_70%)] pointer-events-none" />
         
-        <div className="max-w-5xl mx-auto text-center relative z-10">
+        <div className="container mx-auto px-4 sm:px-6 py-12 sm:py-16 md:py-20 lg:py-28 relative">
+          {/* Floating orbs */}
+          <div className="absolute top-20 left-10 w-48 h-48 sm:w-72 sm:h-72 bg-primary/20 rounded-full blur-3xl animate-float" />
+          <div className="absolute bottom-20 right-10 w-64 h-64 sm:w-96 sm:h-96 bg-purple-400/20 rounded-full blur-3xl animate-float" style={{ animationDelay: '2s' }} />
+        
+          <div className="max-w-5xl mx-auto text-center relative z-10">
           <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-6 border border-primary/20 backdrop-blur-sm animate-in fade-in slide-in-from-bottom-4 duration-700">
             <Sparkles className="w-4 h-4 animate-pulse" />
             AI-Powered PR Reviewer
           </div>
           
-          <h1 className="text-5xl md:text-7xl font-bold text-foreground mb-6 tracking-tight animate-in fade-in slide-in-from-bottom-5 duration-700 delay-100">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-foreground mb-6 tracking-tight animate-in fade-in slide-in-from-bottom-5 duration-700 delay-100">
             Code Reviews
             <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-purple-500 to-primary bg-[length:200%_auto] animate-gradient">
@@ -74,13 +72,13 @@ export default function HomePage() {
             </span>
           </h1>
           
-          <p className="text-xl md:text-2xl text-muted-foreground mb-10 max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-6 duration-700 delay-200">
+          <p className="text-base sm:text-lg md:text-xl lg:text-2xl text-muted-foreground mb-10 max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-6 duration-700 delay-200">
             Previo is a smart code review tool designed to make GitHub pull requests faster, safer, and more reliable.
           </p>
           
-          <div className="flex items-center justify-center gap-4 mb-16 animate-in fade-in slide-in-from-bottom-7 duration-700 delay-300">
+          <div className="flex items-center justify-center gap-4 mb-12 sm:mb-16 animate-in fade-in slide-in-from-bottom-7 duration-700 delay-300">
             <Link href="/sign-up">
-              <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90 h-12 px-8 text-base shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 transition-all duration-300">
+              <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90 h-11 sm:h-12 px-6 sm:px-8 text-sm sm:text-base shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 transition-all duration-300">
                 Try it Now! <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </Link>
@@ -101,19 +99,19 @@ export default function HomePage() {
                 </div>
                 
                 {/* Stats Preview */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
                   {[
                     { label: "Total Analyses", value: "342", icon: BarChart3 },
                     { label: "Completed", value: "318", icon: CheckCircle2 },
                     { label: "Issues Found", value: "1,234", icon: Shield },
                     { label: "Unique Repos", value: "45", icon: Github }
                   ].map((stat, i) => (
-                    <Card key={i} className="p-4 bg-card border-border">
+                    <Card key={i} className="p-3 sm:p-4 bg-card border-border">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-xs text-muted-foreground">{stat.label}</span>
-                        <stat.icon className="w-4 h-4 text-primary" />
+                        <stat.icon className="w-3 h-3 sm:w-4 sm:h-4 text-primary" />
                       </div>
-                      <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+                      <p className="text-xl sm:text-2xl font-bold text-foreground">{stat.value}</p>
                     </Card>
                   ))}
                 </div>
@@ -139,22 +137,23 @@ export default function HomePage() {
             </Card>
           </div>
         </div>
+        </div>
       </section>
 
       {/* How it Works */}
-      <section className="container mx-auto px-6 py-20">
-        <div className="text-center mb-16">
+      <section className="container mx-auto px-4 sm:px-6 py-12 sm:py-16 md:py-20">
+        <div className="text-center mb-12 sm:mb-16">
           <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-4">
             <Rocket className="w-4 h-4" />
             Simple Process
           </div>
-          <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-4">How it Works</h2>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground mb-4">How it Works</h2>
+          <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
             Get started in minutes with our simple 3-step process
           </p>
         </div>
 
-        <div className="max-w-4xl mx-auto grid md:grid-cols-3 gap-8">
+        <div className="max-w-4xl mx-auto grid sm:grid-cols-2 md:grid-cols-3 gap-6 sm:gap-8">
           {[
             {
               step: "1",
@@ -195,19 +194,19 @@ export default function HomePage() {
       </section>
 
       {/* Features Section */}
-      <section className="container mx-auto px-6 py-20 bg-muted/30">
+      <section className="container mx-auto px-4 sm:px-6 py-12 sm:py-16 md:py-20 bg-muted/30">
         <div className="text-center mb-16">
           <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-4">
             <Zap className="w-4 h-4" />
             Built with Modern Tools
           </div>
-          <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-4">Powerful Features</h2>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground mb-4">Powerful Features</h2>
+          <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
             Everything you need for comprehensive code reviews
           </p>
         </div>
 
-        <div className="max-w-6xl mx-auto grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="max-w-6xl mx-auto grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {[
             {
               icon: Code2,
@@ -251,11 +250,11 @@ export default function HomePage() {
         </div>
 
         {/* Tech Stack Icons */}
-        <div className="mt-16 flex items-center justify-center gap-8 opacity-50">
+        <div className="mt-12 sm:mt-16 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-8 opacity-50">
           <div className="text-sm text-muted-foreground">Powered by:</div>
-          <div className="flex items-center gap-6">
+          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-6">
             {['Next.js', 'TypeScript', 'OpenAI', 'Gemini', 'Claude'].map((tech) => (
-              <div key={tech} className="px-4 py-2 bg-card border border-border rounded-lg text-sm font-medium text-foreground">
+              <div key={tech} className="px-3 sm:px-4 py-1.5 sm:py-2 bg-card border border-border rounded-lg text-xs sm:text-sm font-medium text-foreground">
                 {tech}
               </div>
             ))}
@@ -264,16 +263,16 @@ export default function HomePage() {
       </section>
 
       {/* CTA Section */}
-      <section className="container mx-auto px-6 py-20">
-        <Card className="bg-gradient-to-br from-primary/10 via-primary/5 to-background border-primary/20 p-12 md:p-16 text-center">
-          <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
+      <section className="container mx-auto px-4 sm:px-6 py-12 sm:py-16 md:py-20">
+        <Card className="bg-gradient-to-br from-primary/10 via-primary/5 to-background border-primary/20 p-8 sm:p-12 md:p-16 text-center">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-4">
             Ready to Improve Your Code?
           </h2>
-          <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
+          <p className="text-base sm:text-lg md:text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
             Join developers who are shipping better code with AI-powered reviews
           </p>
           <Link href="/sign-up">
-            <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90 h-14 px-10 text-lg">
+            <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90 h-12 sm:h-14 px-8 sm:px-10 text-base sm:text-lg">
               Start Free Today <ArrowRight className="w-5 h-5 ml-2" />
             </Button>
           </Link>
@@ -282,8 +281,8 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer className="border-t border-border bg-card/50">
-        <div className="container mx-auto px-6 py-12">
-          <div className="grid md:grid-cols-4 gap-8 mb-8">
+        <div className="container mx-auto px-4 sm:px-6 py-8 sm:py-12">
+          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8 mb-8">
             <div className="col-span-2">
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">

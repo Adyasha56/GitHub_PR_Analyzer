@@ -96,25 +96,25 @@ export default function AnalysisDetailPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-48" />
-        <Skeleton className="h-96" />
+      <div className="space-y-4 sm:space-y-6">
+        <Skeleton className="h-10 w-48 sm:w-64" />
+        <Skeleton className="h-32 sm:h-48" />
+        <Skeleton className="h-64 sm:h-80 md:h-96" />
       </div>
     );
   }
 
   if (error || !analysis) {
     return (
-      <div className="space-y-6">
-        <Button variant="ghost" onClick={() => router.back()} className="gap-2">
+      <div className="space-y-4 sm:space-y-6">
+        <Button variant="ghost" onClick={() => router.back()} className="gap-2 text-sm">
           <ArrowLeft className="w-4 h-4" />
           Back
         </Button>
-        <Card className="p-12 text-center">
-          <XCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold mb-2">Analysis Not Found</h2>
-          <p className="text-muted-foreground">{error || "This analysis does not exist"}</p>
+        <Card className="p-8 sm:p-12 text-center">
+          <XCircle className="w-10 h-10 sm:w-12 sm:h-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-lg sm:text-xl font-semibold mb-2">Analysis Not Found</h2>
+          <p className="text-sm sm:text-base text-muted-foreground">{error || "This analysis does not exist"}</p>
         </Card>
       </div>
     );
@@ -150,24 +150,24 @@ export default function AnalysisDetailPage() {
   const summary = results?.summary || {};
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Back Button */}
-      <Button variant="ghost" onClick={() => router.back()} className="gap-2">
+      <Button variant="ghost" onClick={() => router.back()} className="gap-2 text-sm">
         <ArrowLeft className="w-4 h-4" />
         Back to Dashboard
       </Button>
 
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <GitPullRequest className="w-8 h-8 text-primary" />
-            <h1 className="text-3xl font-bold">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div className="flex-1">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
+            <GitPullRequest className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold break-all">
               {analysis.repoOwner}/{analysis.repoName}
             </h1>
-            <Badge variant="outline">#{analysis.prNumber}</Badge>
+            <Badge variant="outline" className="text-xs sm:text-sm">#{analysis.prNumber}</Badge>
           </div>
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
             <span className="flex items-center gap-1">
               {getStatusIcon(analysis.status)}
               <Badge variant={getStatusBadgeVariant(analysis.status) as any}>
@@ -187,8 +187,9 @@ export default function AnalysisDetailPage() {
           href={`${analysis.repoUrl}/pull/${analysis.prNumber}`}
           target="_blank"
           rel="noopener noreferrer"
+          className="w-full sm:w-auto"
         >
-          <Button variant="outline" className="gap-2">
+          <Button variant="outline" className="gap-2 w-full sm:w-auto text-sm">
             <ExternalLink className="w-4 h-4" />
             View on GitHub
           </Button>
@@ -196,35 +197,35 @@ export default function AnalysisDetailPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="p-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
+        <Card className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-muted-foreground">Files Analyzed</span>
-            <FileCode className="w-5 h-5 text-blue-500" />
+            <span className="text-xs sm:text-sm text-muted-foreground">Files Analyzed</span>
+            <FileCode className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
           </div>
-          <p className="text-3xl font-bold">{analysis.filesAnalyzed || files.length || 0}</p>
+          <p className="text-2xl sm:text-3xl font-bold">{analysis.filesAnalyzed || files.length || 0}</p>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-muted-foreground">Issues Found</span>
-            <AlertTriangle className="w-5 h-5 text-yellow-500" />
+            <span className="text-xs sm:text-sm text-muted-foreground">Issues Found</span>
+            <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-500" />
           </div>
-          <p className="text-3xl font-bold">{analysis.issuesFound || analysis.results?.summary?.total_issues || 0}</p>
+          <p className="text-2xl sm:text-3xl font-bold">{analysis.issuesFound || analysis.results?.summary?.total_issues || 0}</p>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-muted-foreground">Critical Issues</span>
-            <Bug className="w-5 h-5 text-red-500" />
+            <span className="text-xs sm:text-sm text-muted-foreground">Critical Issues</span>
+            <Bug className="w-4 h-4 sm:w-5 sm:h-5 text-red-500" />
           </div>
-          <p className="text-3xl font-bold">{analysis.results?.summary?.critical_issues || analysis.results?.summary?.bugs || 0}</p>
+          <p className="text-2xl sm:text-3xl font-bold">{analysis.results?.summary?.critical_issues || analysis.results?.summary?.bugs || 0}</p>
         </Card>
       </div>
 
       {/* Error Display */}
       {analysis.status === "failed" && analysis.error && (
-        <Card className="p-6 border-red-500 bg-red-500/10">
+        <Card className="p-4 sm:p-6 border-red-500 bg-red-500/10">
           <h3 className="font-semibold text-red-500 mb-2 flex items-center gap-2">
             <XCircle className="w-5 h-5" />
             Analysis Failed
@@ -238,9 +239,9 @@ export default function AnalysisDetailPage() {
         <>
           {/* Summary */}
           {summary && (
-            <Card className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold flex items-center gap-2">
+            <Card className="p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+                <h3 className="text-sm sm:text-base font-semibold flex items-center gap-2">
                   <CheckCircle2 className="w-5 h-5 text-green-500" />
                   Analysis Summary
                 </h3>
@@ -263,7 +264,7 @@ export default function AnalysisDetailPage() {
                   )}
                 </Button>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 text-xs sm:text-sm">
                 <div>
                   <span className="text-muted-foreground">Total Files:</span>
                   <span className="ml-2 font-medium">{analysis.results?.summary?.total_files || 0}</span>
@@ -286,18 +287,18 @@ export default function AnalysisDetailPage() {
 
           {/* Issues by File */}
           {files.length > 0 && (
-            <Card className="p-6">
-              <h3 className="font-semibold mb-4 flex items-center gap-2">
+            <Card className="p-4 sm:p-6">
+              <h3 className="text-sm sm:text-base font-semibold mb-4 flex items-center gap-2">
                 <Bug className="w-5 h-5 text-red-500" />
                 Issues by File
               </h3>
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {files.map((file: any, index: number) => (
-                  <div key={index} className="border rounded-lg p-4">
-                    <div className="flex items-center gap-2 mb-3">
+                  <div key={index} className="border rounded-lg p-3 sm:p-4">
+                    <div className="flex flex-wrap items-center gap-2 mb-3">
                       <FileCode className="w-4 h-4 text-muted-foreground" />
-                      <span className="font-mono text-sm font-medium">{file.name}</span>
-                      <Badge variant="outline">{file.issues?.length || 0} issues</Badge>
+                      <span className="font-mono text-xs sm:text-sm font-medium break-all">{file.name}</span>
+                      <Badge variant="outline" className="text-xs">{file.issues?.length || 0} issues</Badge>
                     </div>
                     {file.issues && file.issues.length > 0 && (
                       <div className="space-y-2">
@@ -349,14 +350,14 @@ export default function AnalysisDetailPage() {
 
           {/* Raw Response (fallback) */}
           {results.raw_response && (
-            <Card className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold">Raw AI Response</h3>
+            <Card className="p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+                <h3 className="text-sm sm:text-base font-semibold">Raw AI Response</h3>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={copyResponseToClipboard}
-                  className="gap-2"
+                  className="gap-2 text-xs sm:text-sm w-full sm:w-auto"
                 >
                   {copied ? (
                     <>

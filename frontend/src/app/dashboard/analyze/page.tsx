@@ -81,18 +81,18 @@ export default function NewAnalysisPage() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-2xl mx-auto space-y-4 sm:space-y-6 px-4 sm:px-0">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold">New PR Analysis</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-2xl sm:text-3xl font-bold">New PR Analysis</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">
           Analyze a GitHub pull request with AI
         </p>
       </div>
 
       {/* Form Card */}
-      <Card className="p-6">
-        <form onSubmit={handleSubmit} className="space-y-6">
+      <Card className="p-4 sm:p-6">
+        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
           {/* Repository URL */}
           <div className="space-y-2">
             <label className="text-sm font-medium">
@@ -177,9 +177,9 @@ export default function NewAnalysisPage() {
       </Card>
 
       {/* Info Card */}
-      <Card className="p-6 bg-primary/5">
-        <h3 className="font-semibold mb-2 flex items-center gap-2">
-          <GitPullRequest className="w-5 h-5 text-primary" />
+      <Card className="p-4 sm:p-6 bg-primary/5">
+        <h3 className="text-sm sm:text-base font-semibold mb-2 flex items-center gap-2">
+          <GitPullRequest className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
           What happens next?
         </h3>
         <ul className="space-y-2 text-sm text-muted-foreground">
@@ -203,18 +203,18 @@ export default function NewAnalysisPage() {
       </Card>
 
       {/* Example */}
-      <Card className="p-6">
-        <h3 className="font-semibold mb-3">Example</h3>
-        <div className="space-y-2 text-sm">
-          <div className="flex items-center gap-2">
+      <Card className="p-4 sm:p-6">
+        <h3 className="text-sm sm:text-base font-semibold mb-3">Example</h3>
+        <div className="space-y-2 text-xs sm:text-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
             <span className="text-muted-foreground">Repository:</span>
-            <code className="bg-secondary px-2 py-1 rounded">
+            <code className="bg-secondary px-2 py-1 rounded text-xs break-all">
               https://github.com/facebook/react
             </code>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
             <span className="text-muted-foreground">PR Number:</span>
-            <code className="bg-secondary px-2 py-1 rounded">
+            <code className="bg-secondary px-2 py-1 rounded text-xs">
               28000
             </code>
           </div>
@@ -222,7 +222,7 @@ export default function NewAnalysisPage() {
         <Button
           variant="outline"
           size="sm"
-          className="mt-4 gap-2"
+          className="mt-4 gap-2 w-full sm:w-auto text-xs sm:text-sm"
           onClick={() => {
             setRepoUrl("https://github.com/facebook/react");
             setPrNumber("28000");
