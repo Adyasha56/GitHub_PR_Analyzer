@@ -1,5 +1,16 @@
 # Previo - AI-Powered PR Reviewer
 
+> [!IMPORTANT]
+> **Google Gemini API Key Migration Notice**
+>
+> **Issue:** Google AI Studio has moved from legacy `AIza...` Traffic Keys to new `AQ.` Authentication Keys. If you created a Gemini API key recently, it will be an `AQ.` key. Older models (`gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-2.5-flash-lite`) return a 404 error — *"This model is no longer available to new users"* — when called with a new AQ key.
+>
+> **Fix:**
+> 1. Set `GEMINI_MODEL=gemini-3.5-flash` in your `.env` (or any model from the `gemini-3.x` series)
+> 2. Pass the key via the `X-Goog-Api-Key` request header — **not** as a `?key=` query parameter
+>
+> The project is already updated to handle both of these correctly.
+
 A full-stack AI-powered code review system that analyzes GitHub Pull Requests using Google Gemini and LangChain. Features a modern Next.js frontend with real-time analysis tracking, dark/light theme support, and comprehensive backend API.
 
 **Backend deployed link:** https://github-pr-analyzer.onrender.com
