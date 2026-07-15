@@ -13,12 +13,13 @@ const { HumanMessage, SystemMessage } = require("@langchain/core/messages");
 async function analyzeCodeWithAgent(codeContent, metadata = {}) {
   const maxRetries = 3;
   let lastError;
+  const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       // Initialize LLM with Google Gemini
       const llm = new ChatGoogleGenerativeAI({
-        modelName: "gemini-2.0-flash",
+        modelName,
         temperature: 0.3,
         maxOutputTokens: 8192, // Increased for larger PRs
       });

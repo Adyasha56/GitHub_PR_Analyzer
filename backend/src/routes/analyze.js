@@ -39,6 +39,13 @@ router.post('/analyze-pr', requireAuth, async (req, res) => {
 
     const taskId = `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
+    console.log('[analyze-pr] request accepted', {
+      taskId,
+      userId: user.clerkId,
+      repoUrl,
+      prNumber: parseInt(prNumber, 10)
+    });
+
     const analysis = await Analysis.create({
       taskId,
       userId: user.clerkId,
@@ -49,7 +56,13 @@ router.post('/analyze-pr', requireAuth, async (req, res) => {
     });
 
     // Start analysis in background
-    processAnalysis(taskId, repoUrl, prNumber, user).catch(() => {});
+    processAnalysis(taskId, repoUrl, prNumber, user).catch((error) => {
+      console.error('[analyze-pr] unhandled background failure', {
+        taskId,
+        message: error.message,
+        stack: error.stack
+      });
+    });
 
     res.status(202).json({
       message: 'Analysis started successfully',
@@ -71,11 +84,24 @@ router.post('/analyze-pr', requireAuth, async (req, res) => {
  * Background processing function
  */
 async function processAnalysis(taskId, repoUrl, prNumber, user) {
+  let currentStage = 'starting';
+
   try {
+    currentStage = 'marking-processing';
+    console.log('[analyze-pr] processing started', {
+      taskId,
+      userId: user.clerkId,
+      repoUrl,
+      prNumber: parseInt(prNumber, 10)
+    });
+
     await Analysis.findOneAndUpdate(
       { taskId },
       { status: 'processing' }
     );
+
+    currentStage = 'fetching-pr-files';
+    console.log('[analyze-pr] fetching PR files', { taskId, repoUrl, prNumber });
 
     const files = await fetchPRFiles(
       repoUrl,
@@ -83,13 +109,40 @@ async function processAnalysis(taskId, repoUrl, prNumber, user) {
       process.env.GITHUB_TOKEN
     );
 
+    console.log('[analyze-pr] fetched PR files', {
+      taskId,
+      fileCount: files?.length || 0
+    });
+
     if (!files || files.length === 0) {
       throw new Error('No files found in PR');
     }
 
+    currentStage = 'formatting-files';
     const formattedFiles = formatFilesForAI(files);
+
+    console.log('[analyze-pr] files formatted for AI', {
+      taskId,
+      formattedSize: formattedFiles?.length || 0
+    });
+
+    currentStage = 'calling-ai';
+    console.log('[analyze-pr] invoking AI analysis', {
+      taskId,
+      aiProvider: process.env.AI_PROVIDER || 'gemini',
+      formattedSize: formattedFiles?.length || 0
+    });
+
     const results = await analyzeCode(formattedFiles);
     const issuesFound = countIssues(results);
+
+    currentStage = 'saving-completed';
+    console.log('[analyze-pr] AI analysis completed', {
+      taskId,
+      issuesFound,
+      fileGroups: results?.files?.length || 0,
+      parseError: Boolean(results?.summary?.parse_error)
+    });
 
     await Analysis.findOneAndUpdate(
       { taskId },
@@ -108,17 +161,30 @@ async function processAnalysis(taskId, repoUrl, prNumber, user) {
   { $inc: { analysisCount: 1 } }
 );
 
+    console.log('[analyze-pr] processing completed', {
+      taskId,
+      filesAnalyzed: files.length,
+      issuesFound
+    });
+
 
   } catch (error) {
+    console.error('[analyze-pr] processing failed', {
+      taskId,
+      stage: currentStage,
+      message: error.message,
+      stack: error.stack
+    });
+
     await Analysis.findOneAndUpdate(
       { taskId },
       {
-       set: {
-      status: 'failed',
-      error: String(error.message),
-      completedAt: new Date()
+        $set: {
+          status: 'failed',
+          error: String(error.message),
+          completedAt: new Date()
+        }
       }
-    }
     );
   }
 }

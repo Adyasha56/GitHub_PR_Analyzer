@@ -11,14 +11,23 @@ const axios = require('axios');
 async function analyzeCode(codeContent, metadata = {}) {
   const prompt = buildAnalysisPrompt(codeContent, metadata);
   const apiKey = process.env.GOOGLE_API_KEY;
+  const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
   if (!apiKey) {
     throw new Error('GOOGLE_API_KEY not found in environment variables');
   }
 
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
 
   try {
+    console.log('[ai] starting Gemini call', {
+      modelName,
+      repoUrl: metadata.repo_url || 'N/A',
+      prNumber: metadata.pr_number || 'N/A',
+      contentLength: codeContent.length,
+      promptLength: prompt.length
+    });
+
     const response = await axios.post(url, {
       contents: [{
         parts: [{
@@ -32,12 +41,20 @@ async function analyzeCode(codeContent, metadata = {}) {
     }, {
       headers: {
         'Content-Type': 'application/json',
-        'X-goog-api-key': apiKey
+        'X-Goog-Api-Key': apiKey
       },
       timeout: 60000
     });
 
     const responseText = response.data.candidates[0].content.parts[0].text;
+
+    console.log('[ai] Gemini call succeeded', {
+      modelName,
+      repoUrl: metadata.repo_url || 'N/A',
+      prNumber: metadata.pr_number || 'N/A',
+      responseLength: responseText?.length || 0
+    });
+
     return parseAIResponse(responseText);
 
   } catch (error) {
@@ -45,13 +62,21 @@ async function analyzeCode(codeContent, metadata = {}) {
       const status = error.response.status;
       const errorData = error.response.data;
 
+      console.error('[ai] Gemini call failed with response', {
+        status,
+        modelName,
+        repoUrl: metadata.repo_url || 'N/A',
+        prNumber: metadata.pr_number || 'N/A',
+        message: errorData?.error?.message || error.message
+      });
+
       if (status === 400) {
         if (errorData.error?.message?.includes('API key')) {
           throw new Error('Invalid Google API key. Please check your GOOGLE_API_KEY in .env file.');
         }
         throw new Error(`Bad request to Gemini API: ${errorData.error?.message || 'Unknown error'}`);
       } else if (status === 404) {
-        throw new Error('Gemini model not found. Make sure gemini-2.0-flash is accessible with your API key.');
+        throw new Error(`Gemini model not found. Make sure ${modelName} is accessible with your API key.`);
       } else if (status === 429) {
         throw new Error('Rate limit exceeded. Please try again in a few minutes.');
       } else if (status === 403) {
