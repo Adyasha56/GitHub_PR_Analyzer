@@ -1,6 +1,6 @@
 /**
  * AI Service - Google Gemini Code Review
- * Using Gemini 2.0 Flash API
+ * Using Gemini 3.5 Flash API
  */
 
 const axios = require('axios');
@@ -11,7 +11,7 @@ const axios = require('axios');
 async function analyzeCode(codeContent, metadata = {}) {
   const prompt = buildAnalysisPrompt(codeContent, metadata);
   const apiKey = process.env.GOOGLE_API_KEY;
-  const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const modelName = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 
   if (!apiKey) {
     throw new Error('GOOGLE_API_KEY not found in environment variables');
@@ -19,77 +19,97 @@ async function analyzeCode(codeContent, metadata = {}) {
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
 
-  try {
-    console.log('[ai] starting Gemini call', {
-      modelName,
-      repoUrl: metadata.repo_url || 'N/A',
-      prNumber: metadata.pr_number || 'N/A',
-      contentLength: codeContent.length,
-      promptLength: prompt.length
-    });
+  const maxRetries = 2;
+  let lastError;
 
-    const response = await axios.post(url, {
-      contents: [{
-        parts: [{
-          text: prompt
-        }]
-      }],
-      generationConfig: {
-        temperature: 0.3,
-        maxOutputTokens: 4096,
-      }
-    }, {
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': apiKey
-      },
-      timeout: 60000
-    });
-
-    const responseText = response.data.candidates[0].content.parts[0].text;
-
-    console.log('[ai] Gemini call succeeded', {
-      modelName,
-      repoUrl: metadata.repo_url || 'N/A',
-      prNumber: metadata.pr_number || 'N/A',
-      responseLength: responseText?.length || 0
-    });
-
-    return parseAIResponse(responseText);
-
-  } catch (error) {
-    if (error.response) {
-      const status = error.response.status;
-      const errorData = error.response.data;
-
-      console.error('[ai] Gemini call failed with response', {
-        status,
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log('[ai] starting Gemini call', {
         modelName,
+        attempt,
         repoUrl: metadata.repo_url || 'N/A',
         prNumber: metadata.pr_number || 'N/A',
-        message: errorData?.error?.message || error.message
+        contentLength: codeContent.length,
+        promptLength: prompt.length
       });
 
-      if (status === 400) {
-        if (errorData.error?.message?.includes('API key')) {
-          throw new Error('Invalid Google API key. Please check your GOOGLE_API_KEY in .env file.');
+      const response = await axios.post(url, {
+        contents: [{
+          parts: [{
+            text: prompt
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.3,
+          maxOutputTokens: 2048,
         }
-        throw new Error(`Bad request to Gemini API: ${errorData.error?.message || 'Unknown error'}`);
-      } else if (status === 404) {
-        throw new Error(`Gemini model not found. Make sure ${modelName} is accessible with your API key.`);
-      } else if (status === 429) {
-        throw new Error('Rate limit exceeded. Please try again in a few minutes.');
-      } else if (status === 403) {
-        throw new Error('API key does not have permission. Check your Gemini API settings.');
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey
+        },
+        timeout: 60000
+      });
+
+      const responseText = response.data.candidates[0].content.parts[0].text;
+
+      console.log('[ai] Gemini call succeeded', {
+        modelName,
+        attempt,
+        repoUrl: metadata.repo_url || 'N/A',
+        prNumber: metadata.pr_number || 'N/A',
+        responseLength: responseText?.length || 0
+      });
+
+      return parseAIResponse(responseText);
+
+    } catch (error) {
+      lastError = error;
+
+      if (error.response) {
+        const status = error.response.status;
+        const errorData = error.response.data;
+
+        console.error('[ai] Gemini call failed with response', {
+          status,
+          modelName,
+          attempt,
+          repoUrl: metadata.repo_url || 'N/A',
+          prNumber: metadata.pr_number || 'N/A',
+          message: errorData?.error?.message || error.message
+        });
+
+        if (status === 429) {
+          if (attempt < maxRetries) {
+            const waitMs = 5000 * attempt;
+            console.warn(`[ai] rate limited (429), retrying in ${waitMs / 1000}s...`);
+            await new Promise(resolve => setTimeout(resolve, waitMs));
+            continue;
+          }
+          throw new Error('Rate limit exceeded. Please try again in a few minutes.');
+        }
+
+        if (status === 400) {
+          if (errorData.error?.message?.includes('API key')) {
+            throw new Error('Invalid Google API key. Please check your GOOGLE_API_KEY in .env file.');
+          }
+          throw new Error(`Bad request to Gemini API: ${errorData.error?.message || 'Unknown error'}`);
+        } else if (status === 404) {
+          throw new Error(`Gemini model not found. Make sure ${modelName} is accessible with your API key.`);
+        } else if (status === 403) {
+          throw new Error('API key does not have permission. Check your Gemini API settings.');
+        }
       }
-    }
 
-    if (error.code === 'ENOTFOUND' || error.code === 'ETIMEDOUT') {
-      throw new Error('Network error. Could not reach Gemini API. Check your internet connection.');
-    }
+      if (error.code === 'ENOTFOUND' || error.code === 'ETIMEDOUT') {
+        throw new Error('Network error. Could not reach Gemini API. Check your internet connection.');
+      }
 
-    throw new Error(`AI analysis failed: ${error.message}`);
+      throw new Error(`AI analysis failed: ${error.message}`);
+    }
   }
+
+  throw new Error(`AI analysis failed after ${maxRetries} attempts: ${lastError?.message}`);
 }
 
 /**
