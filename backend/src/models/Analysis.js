@@ -70,6 +70,7 @@ const analysisSchema = new mongoose.Schema({
 
 // Compound index for efficient user queries
 analysisSchema.index({ userId: 1, createdAt: -1 });
+analysisSchema.index({ userId: 1, status: 1 });
 
 // Extract repo name and owner from URL before saving
 analysisSchema.pre('save', function() {

@@ -325,26 +325,35 @@ router.get("/stats", requireAuth, async (req, res) => {
     const user = req.user;
     const userId = user.clerkId;
 
-    const [
-      totalAnalyses,
-      completedAnalyses,
-      failedAnalyses,
-      processingAnalyses,
-      uniqueReposRaw,
-      recentAnalysesRaw
-    ] = await Promise.all([
-      Analysis.countDocuments({ userId }),
-      Analysis.countDocuments({ userId, status: "completed" }),
-      Analysis.countDocuments({ userId, status: "failed" }),
-      Analysis.countDocuments({ userId, status: { $in: ["pending", "processing"] } }),
-      Analysis.distinct("repoUrl", { userId }),
-      Analysis.find({ userId })
-        .sort({ createdAt: -1 })
-        .limit(5)
-        .select("repoUrl prNumber status createdAt issuesFound filesAnalyzed")
+    const [aggregationResult] = await Analysis.aggregate([
+      { $match: { userId } },
+      {
+        $facet: {
+          statusCounts: [
+            { $group: { _id: "$status", count: { $sum: 1 } } }
+          ],
+          uniqueRepos: [
+            { $group: { _id: "$repoUrl" } },
+            { $count: "total" }
+          ],
+          recent: [
+            { $sort: { createdAt: -1 } },
+            { $limit: 5 },
+            { $project: { repoUrl: 1, prNumber: 1, status: 1, createdAt: 1, issuesFound: 1, filesAnalyzed: 1 } }
+          ]
+        }
+      }
     ]);
 
-    const recentAnalyses = recentAnalysesRaw.map(a => ({
+    const counts = { total: 0, completed: 0, failed: 0, processing: 0 };
+    for (const { _id, count } of aggregationResult.statusCounts) {
+      counts.total += count;
+      if (_id === "completed") counts.completed = count;
+      else if (_id === "failed") counts.failed = count;
+      else if (_id === "pending" || _id === "processing") counts.processing += count;
+    }
+
+    const recentAnalyses = aggregationResult.recent.map(a => ({
       repoUrl: a.repoUrl || "",
       prNumber: a.prNumber || 0,
       status: a.status || "unknown",
@@ -363,11 +372,11 @@ router.get("/stats", requireAuth, async (req, res) => {
         memberSince: user.createdAt
       },
       stats: {
-        totalAnalyses,
-        completedAnalyses,
-        failedAnalyses,
-        processingAnalyses,
-        uniqueRepos: Array.isArray(uniqueReposRaw) ? uniqueReposRaw.length : 0,
+        totalAnalyses: counts.total,
+        completedAnalyses: counts.completed,
+        failedAnalyses: counts.failed,
+        processingAnalyses: counts.processing,
+        uniqueRepos: aggregationResult.uniqueRepos[0]?.total ?? 0,
         analysisCount: user.analysisCount || 0
       },
       recentActivity: recentAnalyses
