@@ -20,11 +20,11 @@ A full-stack AI-powered code review system that analyzes GitHub Pull Requests us
 
 ### Core Features
 - **Automated PR Analysis** - Fetches and analyzes GitHub Pull Request changes with AI insights
-- **AI-Powered Review** - Google Gemini 2.0 Flash via LangChain agent framework
-- **Multi-Model Support** - Compatible with GPT-4, Gemini, Claude, and Grok
+- **AI-Powered Review** - Google Gemini via a LangChain agent (`services/langchain.js`), with a direct Gemini REST fallback (`services/ai.js`) if the agent call fails
+- **Per-User GitHub Access** - Users can connect their own GitHub account (via Clerk) to analyze private repos; falls back to a shared token for public repos when not connected
 - **Async Processing** - Non-blocking task execution with real-time status tracking
 - **Intelligent Feedback** - Identifies bugs, style issues, and performance problems
-- **Robust & Reliable** - Retry logic, input validation, comprehensive error handling
+- **Robust & Reliable** - Retry logic (including Gemini 429 backoff), input validation, comprehensive error handling
 
 ### Frontend Features
 - **Modern UI** - Built with Next.js 15 and TailwindCSS with purple theme
@@ -50,8 +50,9 @@ A full-stack AI-powered code review system that analyzes GitHub Pull Requests us
 
 ### Backend
 - **Runtime:** Node.js 18+ with Express.js
-- **AI Framework:** LangChain.js with Google Gemini 2.0 Flash
+- **AI Framework:** LangChain.js (`@langchain/google-genai`) with Google Gemini, direct-axios fallback if the agent call fails
 - **Storage:** MongoDB via Mongoose (persistent task & results storage)
+- **GitHub Access:** Per-user OAuth token via Clerk (connected GitHub account), falling back to a shared PAT for public repos
 - **GitHub API:** Axios for fetching PR data
 - **Port:** 3001
 
@@ -76,8 +77,7 @@ GitHub_PR_Analyzer/
 │   │   ├── middleware/        # Auth & request middleware
 │   │   ├── models/            # Data models
 │   │   ├── routes/            # API routes
-│   │   ├── services/          # Business logic (AI, GitHub, LangChain)
-│   │   └── utils/             # Task manager & helpers
+│   │   └── services/          # Business logic (ai.js, langchain.js, github.js, githubAuth.js)
 │   └── package.json
 │
 └── frontend/                   # Next.js web application
@@ -137,9 +137,15 @@ npm run dev        # Runs on http://localhost:3001
 ```
 
 **Get API Keys:**
-- GitHub Token: https://github.com/settings/tokens (needs `repo` or `public_repo` scope)
+- GitHub Token: https://github.com/settings/tokens (needs `repo` or `public_repo` scope) - used as the shared fallback token
 - Gemini API: https://ai.google.dev/
 - Clerk Authentication: https://dashboard.clerk.com
+
+**Optional - Per-user GitHub access (for private repos):**
+1. In the Clerk Dashboard, go to **Configure -> SSO connections -> GitHub**, click **Enable connection**
+2. Leave "Enable for sign-up and sign-in" off if you only want it as a linkable account (not a login method)
+3. Toggle **Use custom credentials** and register your own GitHub OAuth App at https://github.com/settings/developers, pasting its Client ID/Secret into Clerk (the default shared credentials don't grant the `repo` scope needed for private repos)
+4. Users can then connect GitHub from their account menu (**Manage account -> Connected accounts**); the backend automatically prefers their token over the shared `GITHUB_TOKEN` (see `backend/src/services/githubAuth.js`)
 
 ---
 
@@ -269,11 +275,13 @@ curl -X POST https://github-pr-analyzer.onrender.com/api/analyze-pr \
 ## 🚀 Future Improvements
 
 ### Backend Enhancements
+- [x] LangChain agent as the primary AI path (with direct-Gemini fallback)
+- [x] Per-user GitHub OAuth (via Clerk), shared PAT as fallback
 - [ ] Implement BullMQ/Celery job queue for reliability
 - [ ] Add comprehensive automated tests (Jest/Mocha)
 - [ ] Enhanced AI analysis (security vulnerabilities, complexity metrics)
 - [ ] Caching layer for PR data
-- [ ] Multi-model support (OpenAI, Claude)
+- [ ] Real multi-model support (OpenAI/Claude SDKs are installed but not wired up yet)
 - [ ] Metrics & monitoring (Prometheus)
 
 ### Frontend Enhancements
@@ -388,16 +396,17 @@ npm install
 │  └──────────────────┬──────────────────────────────┘   │
 │                     │                                    │
 │  ┌─────────────────────────────────────────────────┐   │
-│  │     Task Manager (MongoDB-backed, persistent)  │   │
-│  │  - Task tracking & status management            │   │
-│  │  - Background task execution                    │   │
+│  │   Analysis Persistence (MongoDB, via Mongoose) │   │
+│  │  - Status tracking (pending/processing/done)     │   │
+│  │  - Background task execution (in-process)        │   │
 │  └──────────┬──────────────────────┬───────────────┘   │
 │             │                      │                    │
 │  ┌──────────▼──────────┐  ┌────────▼────────────────┐  │
-│  │  GitHub Service    │  │  LangChain Agent        │  │
-│  │  - Fetch PR files  │  │  - Gemini 2.0 Flash     │  │
-│  │  - PR metadata     │  │  - Code analysis        │  │
-│  │  - Axios HTTP      │  │  - Issue detection      │  │
+│  │  GitHub Service     │  │  LangChain Agent        │  │
+│  │  - Per-user OAuth   │  │  - Gemini (agent)       │  │
+│  │    token via Clerk, │  │  - Falls back to direct │  │
+│  │    else shared PAT  │  │    axios call on error  │  │
+│  │  - Fetch PR files   │  │  - Issue detection      │  │
 │  └────────────────────┘  └─────────────────────────┘  │
 └─────────────────────────────────────────────────────────┘
 ```

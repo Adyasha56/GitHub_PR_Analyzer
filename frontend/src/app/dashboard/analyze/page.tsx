@@ -1,24 +1,37 @@
 "use client";
 
-import { useState } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useEffect, useState } from "react";
+import { useAuth, useClerk } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { Card } from "@/src/components/ui/card";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { Alert, AlertDescription } from "@/src/components/ui/alert";
 import { Badge } from "@/src/components/ui/badge";
-import { 
-  GitPullRequest, 
-  AlertCircle, 
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/src/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/src/components/ui/dialog";
+import {
+  GitPullRequest,
+  AlertCircle,
   Loader2,
   CheckCircle2,
-  ExternalLink
+  ExternalLink,
+  Github,
+  Info
 } from "lucide-react";
+import Link from "next/link";
 import { api, setAuthToken } from "@/src/lib/api";
 
 export default function NewAnalysisPage() {
   const { getToken } = useAuth();
+  const { openUserProfile } = useClerk();
   const router = useRouter();
   const [repoUrl, setRepoUrl] = useState("");
   const [prNumber, setPrNumber] = useState("");
@@ -28,6 +41,11 @@ export default function NewAnalysisPage() {
     taskId: string;
     analysisId: string;
   } | null>(null);
+  const [showGithubInfo, setShowGithubInfo] = useState(false);
+
+  useEffect(() => {
+    setShowGithubInfo(true);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,6 +100,54 @@ export default function NewAnalysisPage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-4 sm:space-y-6 px-4 sm:px-0">
+      {/* GitHub Connect Info Dialog */}
+      <Dialog open={showGithubInfo} onOpenChange={setShowGithubInfo}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Github className="w-5 h-5" />
+              Analyzing private repos?
+            </DialogTitle>
+            <DialogDescription>
+              Public repositories work right away with no setup. To analyze
+              pull requests on your private repos, connect your GitHub
+              account first.
+            </DialogDescription>
+          </DialogHeader>
+
+          <ol className="space-y-2 text-sm text-muted-foreground">
+            <li className="flex items-start gap-2">
+              <Badge variant="outline" className="mt-0.5 shrink-0">1</Badge>
+              <span>Open your <strong className="text-foreground">Profile</strong> page</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <Badge variant="outline" className="mt-0.5 shrink-0">2</Badge>
+              <span>Click <strong className="text-foreground">Manage account</strong></span>
+            </li>
+            <li className="flex items-start gap-2">
+              <Badge variant="outline" className="mt-0.5 shrink-0">3</Badge>
+              <span>Under <strong className="text-foreground">Connected accounts</strong>, connect GitHub and approve access</span>
+            </li>
+          </ol>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowGithubInfo(false)}>
+              Maybe later
+            </Button>
+            <Button
+              className="gap-2"
+              onClick={() => {
+                setShowGithubInfo(false);
+                openUserProfile();
+              }}
+            >
+              <Github className="w-4 h-4" />
+              Connect GitHub
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Header */}
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold">New PR Analysis</h1>
@@ -95,8 +161,26 @@ export default function NewAnalysisPage() {
         <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
           {/* Repository URL */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">
+            <label className="text-sm font-medium inline-flex items-center gap-1.5">
               Repository URL
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex text-muted-foreground cursor-help">
+                    <Info className="w-3.5 h-3.5" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Github className="w-3.5 h-3.5" />
+                    Public repos work out of the box. To analyze private
+                    repos, connect your GitHub account from{" "}
+                    <Link href="/dashboard/profile" className="underline">
+                      Profile
+                    </Link>
+                    .
+                  </span>
+                </TooltipContent>
+              </Tooltip>
             </label>
             <Input
               type="text"

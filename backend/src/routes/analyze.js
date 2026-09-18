@@ -9,6 +9,8 @@ const { requireAuth } = require('../middleware/auth');
 const Analysis = require('../models/Analysis');
 const User = require('../models/User');
 const { fetchPRFiles, formatFilesForAI } = require('../services/github');
+const { getGithubToken } = require('../services/githubAuth');
+const { analyzeCodeWithAgent } = require('../services/langchain');
 const { analyzeCode } = require('../services/ai');
 
 /**
@@ -103,10 +105,11 @@ async function processAnalysis(taskId, repoUrl, prNumber, user) {
     currentStage = 'fetching-pr-files';
     console.log('[analyze-pr] fetching PR files', { taskId, repoUrl, prNumber });
 
+    const githubToken = await getGithubToken(user.clerkId);
     const files = await fetchPRFiles(
       repoUrl,
       prNumber,
-      process.env.GITHUB_TOKEN
+      githubToken
     );
 
     console.log('[analyze-pr] fetched PR files', {
@@ -133,7 +136,17 @@ async function processAnalysis(taskId, repoUrl, prNumber, user) {
       formattedSize: formattedFiles?.length || 0
     });
 
-    const results = await analyzeCode(formattedFiles);
+    const aiMetadata = { repo_url: repoUrl, pr_number: prNumber };
+    let results;
+    try {
+      results = await analyzeCodeWithAgent(formattedFiles, aiMetadata);
+    } catch (agentError) {
+      console.error('[analyze-pr] LangChain agent failed, falling back to direct Gemini call', {
+        taskId,
+        message: agentError.message
+      });
+      results = await analyzeCode(formattedFiles, aiMetadata);
+    }
     const issuesFound = countIssues(results);
 
     currentStage = 'saving-completed';

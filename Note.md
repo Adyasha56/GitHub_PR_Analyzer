@@ -1,5 +1,11 @@
 # GitHub PR Analyzer - Full Stack Upgrade Plan
 
+> [!NOTE]
+> **Status: historical planning doc.** The Clerk + MongoDB + Next.js migration
+> described below is complete. See [Current State vs. This Plan](#-current-state-vs-this-plan)
+> at the bottom for what actually shipped and what diverged from the original plan.
+> For up-to-date setup/usage, see `README.md`.
+
 ## 📋 Project Overview
 
 **Current State:**
@@ -542,5 +548,30 @@ npm install mongoose @clerk/express
 ```
 
 ---
+
+## 📌 Current State vs. This Plan
+
+This plan's core architecture (Next.js + Clerk + MongoDB) was implemented as
+described. A few things evolved past what's written above:
+
+- **`utils/taskManager.js`** - the in-memory version mentioned in the original
+  structure was superseded by direct MongoDB reads/writes on the `Analysis`
+  model and has since been deleted entirely (it was never migrated, just left
+  behind as dead code until removed).
+- **AI analysis path** - `services/langchain.js` (LangChain agent via
+  `@langchain/google-genai`) is now the primary analysis path, with
+  `services/ai.js` (direct Gemini REST calls) kept as an automatic fallback if
+  the agent call throws. Both were previously duplicated with only `ai.js`
+  actually wired up; that's fixed.
+- **GitHub access** - added `services/githubAuth.js`, which resolves a
+  per-user GitHub OAuth token via Clerk's connected-accounts feature
+  (`clerkClient.users.getUserOauthAccessToken`), falling back to the shared
+  `GITHUB_TOKEN` for users who haven't connected their GitHub account. This
+  wasn't in the original plan - the original plan only ever used the single
+  shared PAT.
+- **Multi-model support** (OpenAI/Claude/Grok) - `AI_PROVIDER` env var and
+  SDKs are still installed but not actually implemented; only Gemini works
+  regardless of the setting. Not yet done, contrary to what package.json
+  dependencies might suggest.
 
 *Document created: Planning phase for GitHub PR Analyzer Full-Stack Application*

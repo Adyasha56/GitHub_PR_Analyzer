@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAuth, useUser } from "@clerk/nextjs";
+import { useAuth, useUser, useClerk } from "@clerk/nextjs";
 import { Card } from "@/src/components/ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "@/src/components/ui/avatar";
 import { Badge } from "@/src/components/ui/badge";
+import { Button } from "@/src/components/ui/button";
 import { Skeleton } from "@/src/components/ui/skeleton";
 import { 
   User as UserIcon, 
@@ -20,6 +21,7 @@ import type { UserStats } from "@/src/types";
 export default function ProfilePage() {
   const { getToken } = useAuth();
   const { user } = useUser();
+  const { openUserProfile } = useClerk();
   const [stats, setStats] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -96,9 +98,17 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <div className="flex gap-2 mt-4">
+            <div className="flex items-center gap-2 mt-4">
               <Badge variant="secondary">Free Plan</Badge>
               <Badge variant="outline">Developer</Badge>
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-auto sm:ml-2 h-6 px-3 rounded-full text-xs"
+                onClick={() => openUserProfile()}
+              >
+                Manage account
+              </Button>
             </div>
           </div>
         </div>

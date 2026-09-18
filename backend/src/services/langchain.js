@@ -13,37 +13,52 @@ const { HumanMessage, SystemMessage } = require("@langchain/core/messages");
 async function analyzeCodeWithAgent(codeContent, metadata = {}) {
   const maxRetries = 3;
   let lastError;
-  const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const modelName = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+  const apiKey = process.env.GOOGLE_API_KEY;
+
+  if (!apiKey) {
+    throw new Error('GOOGLE_API_KEY not found in environment variables');
+  }
+
+  const llm = new ChatGoogleGenerativeAI({
+    model: modelName,
+    apiKey,
+    temperature: 0.3,
+    maxOutputTokens: 8192,
+  });
+
+  const prompt = buildAnalysisPrompt(codeContent, metadata);
+
+  const messages = [
+    new SystemMessage(`You are an autonomous code review agent.
+      Your goal is to analyze pull request changes and identify issues systematically.
+      Focus on bugs, style problems, and performance improvements.
+      Return only valid JSON in the specified format.
+    `),
+    new HumanMessage(prompt)
+  ];
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      // Initialize LLM with Google Gemini
-      const llm = new ChatGoogleGenerativeAI({
+      console.log('[langchain] starting Gemini call', {
         modelName,
-        temperature: 0.3,
-        maxOutputTokens: 8192, // Increased for larger PRs
+        attempt,
+        repoUrl: metadata.repo_url || 'N/A',
+        prNumber: metadata.pr_number || 'N/A',
+        contentLength: codeContent.length,
+        promptLength: prompt.length
       });
 
-      // Build the analysis prompt
-      const prompt = buildAnalysisPrompt(codeContent, metadata);
-
-      // Create messages using LangChain format (agent-style communication)
-      const messages = [
-        new SystemMessage(`You are an autonomous code review agent.
-          Your goal is to analyze pull request changes and identify issues systematically.
-          Focus on bugs, style problems, and performance improvements.
-          Return only valid JSON in the specified format.
-        `),
-        new HumanMessage(prompt)
-      ];
-
-      // Invoke the LLM through LangChain
       const response = await llm.invoke(messages);
-
-      // Parse and validate the response
       const analysisResults = parseAIResponse(response.content);
 
-      // Check if parsing was successful
+      console.log('[langchain] Gemini call succeeded', {
+        modelName,
+        attempt,
+        repoUrl: metadata.repo_url || 'N/A',
+        prNumber: metadata.pr_number || 'N/A'
+      });
+
       if (analysisResults.error && attempt < maxRetries) {
         throw new Error('AI returned invalid JSON format');
       }
@@ -52,24 +67,45 @@ async function analyzeCodeWithAgent(codeContent, metadata = {}) {
 
     } catch (error) {
       lastError = error;
+      const status = error.status || error.response?.status;
 
-      // Don't retry on certain errors
-      if (error.message.includes('API key') || error.message.includes('quota')) {
-        throw error;
+      console.error('[langchain] Gemini call failed', {
+        status,
+        modelName,
+        attempt,
+        repoUrl: metadata.repo_url || 'N/A',
+        prNumber: metadata.pr_number || 'N/A',
+        message: error.message
+      });
+
+      if (status === 429 || error.message?.includes('429') || error.message?.toLowerCase().includes('quota')) {
+        if (attempt < maxRetries) {
+          const waitMs = 5000 * attempt;
+          console.warn(`[langchain] rate limited (429), retrying in ${waitMs / 1000}s...`);
+          await new Promise(resolve => setTimeout(resolve, waitMs));
+          continue;
+        }
+        throw new Error('Rate limit exceeded. Please try again in a few minutes.');
       }
 
-      // Wait before retrying (exponential backoff)
+      if (error.message?.includes('API key')) {
+        throw new Error('Invalid Google API key. Please check your GOOGLE_API_KEY in .env file.');
+      }
+
+      if (status === 404) {
+        throw new Error(`Gemini model not found. Make sure ${modelName} is accessible with your API key.`);
+      }
+
+      if (status === 403) {
+        throw new Error('API key does not have permission. Check your Gemini API settings.');
+      }
+
       if (attempt < maxRetries) {
-        const waitTime = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+        const waitTime = Math.pow(2, attempt) * 1000;
         await new Promise(resolve => setTimeout(resolve, waitTime));
+        continue;
       }
     }
-  }
-
-  // All retries failed
-
-  if (lastError.message.includes('API key')) {
-    throw new Error('Invalid API key. Check your environment variables.');
   }
 
   throw new Error(`LangChain agent analysis failed: ${lastError.message}`);
@@ -195,12 +231,10 @@ function generateSummary(files) {
       totalIssues += file.issues.length;
 
       file.issues.forEach(issue => {
-        // Count critical issues
         if (issue.severity === 'high' || issue.severity === 'critical') {
           criticalIssues++;
         }
 
-        // Count by type
         if (issue.type === 'bug') bugs++;
         else if (issue.type === 'style') styleIssues++;
         else if (issue.type === 'performance') performanceIssues++;
